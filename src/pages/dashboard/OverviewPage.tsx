@@ -94,7 +94,9 @@ export default function OverviewPage() {
                 </span>
               </div>
               <span className="text-muted text-sm">
-                {athlete.discipline ? disciplineLabels[athlete.discipline] : '—'}
+                {athlete.disciplines?.length
+                  ? athlete.disciplines.map(d => disciplineLabels[d]).join(', ')
+                  : '—'}
               </span>
             </div>
           ))}
