@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Profile } from '../../types/database'
+import type { Profile, Discipline } from '../../types/database'
+
+const disciplineLabels: Record<Discipline, string> = {
+  sprint: 'Sprint',
+  demi_fond: 'Demi-fond',
+  fond: 'Fond',
+  sauts: 'Sauts',
+  lancers: 'Lancers',
+  combines: 'Combinés',
+  marche: 'Marche',
+}
 
 export default function OverviewPage() {
   const { user } = useAuth()
@@ -76,15 +86,15 @@ export default function OverviewPage() {
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center shrink-0">
                   <span className="text-brand text-xs font-semibold">
-                    {(athlete.full_name ?? '?').charAt(0).toUpperCase()}
+                    {(athlete.first_name ?? athlete.last_name ?? '?').charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <span className="text-ink text-sm font-medium truncate">
-                  {athlete.full_name ?? 'Athlète sans nom'}
+                  {[athlete.first_name, athlete.last_name].filter(Boolean).join(' ') || '—'}
                 </span>
               </div>
               <span className="text-muted text-sm">
-                {athlete.discipline ?? '—'}
+                {athlete.discipline ? disciplineLabels[athlete.discipline] : '—'}
               </span>
             </div>
           ))}

@@ -93,7 +93,9 @@ export default function Sidebar() {
       <div className="px-3 py-4 border-t border-sidebar-border">
         {profile && (
           <div className="px-3 mb-3">
-            <p className="text-white text-sm font-medium truncate">{profile.full_name ?? 'Coach'}</p>
+            <p className="text-white text-sm font-medium truncate">
+              {[profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Coach'}
+            </p>
             {profile.club && <p className="text-muted text-xs truncate mt-0.5">{profile.club}</p>}
           </div>
         )}

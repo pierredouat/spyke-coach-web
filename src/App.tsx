@@ -17,7 +17,7 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const { session, profile, loading } = useAuth()
   if (loading) return null
   if (!session) return <Navigate to="/login" replace />
-  if (profile?.role === 'coach' && profile?.full_name) return <Navigate to="/" replace />
+  if (profile?.onboarding_completed) return <Navigate to="/" replace />
   return <>{children}</>
 }
 

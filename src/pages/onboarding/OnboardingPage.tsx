@@ -14,7 +14,8 @@ export default function OnboardingPage() {
   const { user, profile, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('form')
-  const [fullName, setFullName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [club, setClub] = useState('')
   const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -27,14 +28,16 @@ export default function OnboardingPage() {
     setError(null)
     setLoading(true)
 
-    const code = profile?.invitation_code ?? generateInviteCode()
+    const code = profile?.invite_code ?? generateInviteCode()
 
     const { error } = await supabase.from('profiles').upsert({
       id: user.id,
       role: 'coach',
-      full_name: fullName.trim(),
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
       club: club.trim() || null,
-      invitation_code: code,
+      invite_code: code,
+      onboarding_completed: true,
     })
 
     if (error) {
@@ -72,11 +75,11 @@ export default function OnboardingPage() {
 
           <h1 className="text-white text-2xl font-semibold mb-2">Compte créé !</h1>
           <p className="text-muted text-sm mb-8">
-            Partagez ce code à vos athlètes pour qu'ils vous rejoignent dans l'application mobile SPYKE.
+            Partagez ce code à vos athlètes pour qu&apos;ils vous rejoignent dans l&apos;application mobile SPYKE.
           </p>
 
           <div className="bg-sidebar rounded-xl border border-sidebar-border p-6 mb-6">
-            <p className="text-muted text-xs uppercase tracking-widest mb-3">Code d'invitation</p>
+            <p className="text-muted text-xs uppercase tracking-widest mb-3">Code d&apos;invitation</p>
             <p className="text-white text-3xl font-mono font-bold tracking-[0.2em] mb-4">{inviteCode}</p>
             <button
               onClick={copyCode}
@@ -109,16 +112,29 @@ export default function OnboardingPage() {
         <p className="text-muted text-sm mb-8">Quelques informations pour finaliser votre compte</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-muted mb-1.5">Nom complet</label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={e => setFullName(e.target.value)}
-              required
-              placeholder="Jean Dupont"
-              className="w-full bg-sidebar-border border border-sidebar-border rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-muted mb-1.5">Prénom</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                required
+                placeholder="Jean"
+                className="w-full bg-sidebar-border border border-sidebar-border rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-muted mb-1.5">Nom</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={e => setLastName(e.target.value)}
+                required
+                placeholder="Dupont"
+                className="w-full bg-sidebar-border border border-sidebar-border rounded-lg px-4 py-3 text-white placeholder-muted text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm text-muted mb-1.5">Club <span className="text-muted/60">(optionnel)</span></label>

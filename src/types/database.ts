@@ -1,38 +1,56 @@
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
+export type UserRole = 'athlete' | 'coach'
+export type Discipline = 'sprint' | 'demi_fond' | 'fond' | 'sauts' | 'lancers' | 'combines' | 'marche'
+
 export type Database = {
   public: {
     Tables: {
       profiles: {
         Row: {
           id: string
-          role: string | null
-          full_name: string | null
-          club: string | null
-          invitation_code: string | null
-          discipline: string | null
+          role: UserRole | null
+          first_name: string | null
+          last_name: string | null
+          discipline: Discipline | null
+          disciplines: Discipline[]
           avatar_url: string | null
+          birth_year: number | null
+          club: string | null
+          invite_code: string | null
+          onboarding_completed: boolean
           created_at: string | null
+          updated_at: string | null
         }
         Insert: {
           id: string
-          role?: string | null
-          full_name?: string | null
-          club?: string | null
-          invitation_code?: string | null
-          discipline?: string | null
+          role?: UserRole | null
+          first_name?: string | null
+          last_name?: string | null
+          discipline?: Discipline | null
+          disciplines?: Discipline[]
           avatar_url?: string | null
+          birth_year?: number | null
+          club?: string | null
+          invite_code?: string | null
+          onboarding_completed?: boolean
           created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
           id?: string
-          role?: string | null
-          full_name?: string | null
-          club?: string | null
-          invitation_code?: string | null
-          discipline?: string | null
+          role?: UserRole | null
+          first_name?: string | null
+          last_name?: string | null
+          discipline?: Discipline | null
+          disciplines?: Discipline[]
           avatar_url?: string | null
+          birth_year?: number | null
+          club?: string | null
+          invite_code?: string | null
+          onboarding_completed?: boolean
           created_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
