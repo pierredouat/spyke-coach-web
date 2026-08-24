@@ -16,9 +16,8 @@ interface ExEntry {
   // Recovery (displayed in chosen unit, stored in seconds)
   rest_value: string
   rest_unit: 'min' | 's'
-  // Contextual — transversal
+  // Contextual
   intention: string
-  technical_notes: string
   notes: string
 }
 
@@ -33,7 +32,7 @@ function emptyEntry(ex: Exercise): ExEntry {
     exercise: ex,
     sets: '', reps: '', intensity: '', distance: '', duration: '',
     rest_value: '', rest_unit: 's',
-    intention: '', technical_notes: '', notes: '',
+    intention: '', notes: '',
   }
 }
 
@@ -91,8 +90,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         rest_value,
         rest_unit,
         intention: se.intention ?? '',
-        technical_notes: se.technical_notes ?? '',
-        notes: se.notes ?? '',
+        notes: [se.notes, se.technical_notes].filter(Boolean).join('\n') || '',
       }
     }) ?? []
   )
@@ -111,18 +109,6 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
       setAllExercises(data ?? [])
     })
   }, [])
-
-  // Enrich edit-mode entries with the real exercise family once the bank is loaded.
-  // session_exercises doesn't carry family; we look it up by exercise_id.
-  useEffect(() => {
-    if (!session || allExercises.length === 0) return
-    setEntries(prev => prev.map(e => {
-      if (e.exercise.family !== null || !e.exercise.id) return e
-      const found = allExercises.find(ax => ax.id === e.exercise.id)
-      if (!found) return e
-      return { ...e, exercise: { ...e.exercise, family: found.family } }
-    }))
-  }, [allExercises, session])
 
   // ── Athlete helpers ─────────────────────────────────────────────────────────
   function toggleAthlete(id: string) {
@@ -230,7 +216,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         rest_seconds: restS,
         intensity: e.intensity || null,
         intention: e.intention || null,
-        technical_notes: e.technical_notes || null,
+        technical_notes: null,
         notes: e.notes || null,
       }
     })
@@ -433,22 +419,6 @@ function ExerciseCard({ entry, index, onRemove, onUpdate }: {
   onRemove: () => void
   onUpdate: <K extends keyof ExEntry>(k: K, v: ExEntry[K]) => void
 }) {
-  const f = entry.exercise.family
-
-  const isMuscu     = f === 'musculation' || f === 'plyometrie'
-  const isDiscipline = f === 'discipline'
-  const isCardio    = f === 'cardio_aerobie'
-  const isGainage   = f === 'gainage_prehab'
-  // null family (loaded from edit without exercise join) → show all fields
-  const isUnknown   = f === null
-
-  const showSetsReps    = isMuscu || isGainage || isUnknown
-  const showDistance    = isDiscipline || isCardio || isUnknown
-  const showDuration    = isDiscipline || isCardio || isGainage || isUnknown
-  const showIntensity   = isMuscu || isCardio || isUnknown
-  const showRest        = !isGainage || isUnknown
-  const showTechNotes   = isDiscipline
-
   return (
     <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/50 space-y-2.5">
 
@@ -462,7 +432,7 @@ function ExerciseCard({ entry, index, onRemove, onUpdate }: {
         </button>
       </div>
 
-      {/* Intention — always, full width, visually accented */}
+      {/* Intention — full width, visually accented */}
       <div>
         <label className="block text-xs font-semibold text-brand mb-1">Intention</label>
         <input
@@ -473,74 +443,38 @@ function ExerciseCard({ entry, index, onRemove, onUpdate }: {
         />
       </div>
 
-      {/* Metric fields grid */}
+      {/* Metric fields — all visible, all optional */}
       <div className="grid grid-cols-3 gap-2">
-        {showSetsReps && (
-          <>
-            <ExField label="Séries" value={entry.sets} onChange={v => onUpdate('sets', v)} />
-            <ExField label="Répétitions" value={entry.reps} onChange={v => onUpdate('reps', v)} />
-          </>
-        )}
+        <ExField label="Séries"        value={entry.sets}      onChange={v => onUpdate('sets', v)} />
+        <ExField label="Répétitions"   value={entry.reps}      onChange={v => onUpdate('reps', v)} />
+        <ExField label="Distance (m)"  value={entry.distance}  onChange={v => onUpdate('distance', v)} />
+        <ExField label="Durée (s)"     value={entry.duration}  onChange={v => onUpdate('duration', v)} />
+        <ExField label="Intensité"     value={entry.intensity} onChange={v => onUpdate('intensity', v)} />
 
-        {showDistance && (
-          <ExField label="Distance (m)" value={entry.distance} onChange={v => onUpdate('distance', v)} />
-        )}
-
-        {showDuration && (
-          <ExField label="Durée (s)" value={entry.duration} onChange={v => onUpdate('duration', v)} />
-        )}
-
-        {showIntensity && (
-          <ExField
-            label={isMuscu ? 'Charge' : 'Intensité'}
-            value={entry.intensity}
-            onChange={v => onUpdate('intensity', v)}
-            placeholder={isMuscu ? '80 kg' : ''}
-          />
-        )}
-
-        {/* Récup — paired input + unit selector */}
-        {showRest && (
-          <div>
-            <label className="block text-xs text-muted mb-1">Récupération</label>
-            <div className="flex gap-1">
-              <input
-                value={entry.rest_value}
-                onChange={e => onUpdate('rest_value', e.target.value)}
-                placeholder="90"
-                className="min-w-0 flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
-              />
-              <select
-                value={entry.rest_unit}
-                onChange={e => onUpdate('rest_unit', e.target.value as 'min' | 's')}
-                className="shrink-0 border border-gray-200 rounded-md px-1.5 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
-              >
-                <option value="s">s</option>
-                <option value="min">min</option>
-              </select>
-            </div>
+        {/* Récup — paired value + unit selector */}
+        <div>
+          <label className="block text-xs text-muted mb-1">Récupération</label>
+          <div className="flex gap-1">
+            <input
+              value={entry.rest_value}
+              onChange={e => onUpdate('rest_value', e.target.value)}
+              placeholder="90"
+              className="min-w-0 flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+            />
+            <select
+              value={entry.rest_unit}
+              onChange={e => onUpdate('rest_unit', e.target.value as 'min' | 's')}
+              className="shrink-0 border border-gray-200 rounded-md px-1.5 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+            >
+              <option value="s">s</option>
+              <option value="min">min</option>
+            </select>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Notes techniques — discipline only, full width textarea */}
-      {showTechNotes && (
-        <div>
-          <label className="block text-xs text-muted mb-1">Notes techniques</label>
-          <textarea
-            value={entry.technical_notes}
-            onChange={e => onUpdate('technical_notes', e.target.value)}
-            rows={2}
-            placeholder="Ex : élan réduit 4 foulées, plots à 8 m, départ haut…"
-            className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink resize-none focus:outline-none focus:border-brand transition-colors bg-white"
-          />
-        </div>
-      )}
-
-      {/* Notes — all families except discipline (which has Notes techniques instead) */}
-      {!isDiscipline && (
-        <ExField label="Notes" value={entry.notes} onChange={v => onUpdate('notes', v)} />
-      )}
+      {/* Notes — single free-text field */}
+      <ExField label="Notes" value={entry.notes} onChange={v => onUpdate('notes', v)} />
     </div>
   )
 }
