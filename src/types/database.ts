@@ -2,6 +2,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json } | 
 
 export type UserRole = 'athlete' | 'coach'
 export type Discipline = 'sprint' | 'demi_fond' | 'fond' | 'sauts' | 'lancers' | 'combines' | 'marche'
+export type RelationshipStatus = 'pending' | 'active' | 'inactive'
 
 export type Database = {
   public: {
@@ -59,19 +60,25 @@ export type Database = {
           id: string
           coach_id: string
           athlete_id: string
-          created_at: string | null
+          status: RelationshipStatus
+          invited_at: string
+          accepted_at: string | null
         }
         Insert: {
           id?: string
           coach_id: string
           athlete_id: string
-          created_at?: string | null
+          status?: RelationshipStatus
+          invited_at?: string
+          accepted_at?: string | null
         }
         Update: {
           id?: string
           coach_id?: string
           athlete_id?: string
-          created_at?: string | null
+          status?: RelationshipStatus
+          invited_at?: string
+          accepted_at?: string | null
         }
         Relationships: []
       }

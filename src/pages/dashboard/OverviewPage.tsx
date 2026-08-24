@@ -1,17 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Profile, Discipline } from '../../types/database'
-
-const disciplineLabels: Record<Discipline, string> = {
-  sprint: 'Sprint',
-  demi_fond: 'Demi-fond',
-  fond: 'Fond',
-  sauts: 'Sauts',
-  lancers: 'Lancers',
-  combines: 'Combinés',
-  marche: 'Marche',
-}
+import type { Profile } from '../../types/database'
+import { formatDisciplines } from '../../lib/disciplines'
 
 export default function OverviewPage() {
   const { user } = useAuth()
@@ -26,6 +17,7 @@ export default function OverviewPage() {
         .from('coach_athlete_relationships')
         .select('athlete_id')
         .eq('coach_id', user!.id)
+        .eq('status', 'active')
 
       if (!relationships?.length) {
         setLoading(false)
@@ -93,11 +85,7 @@ export default function OverviewPage() {
                   {[athlete.first_name, athlete.last_name].filter(Boolean).join(' ') || '—'}
                 </span>
               </div>
-              <span className="text-muted text-sm">
-                {athlete.disciplines?.length
-                  ? athlete.disciplines.map(d => disciplineLabels[d]).join(', ')
-                  : '—'}
-              </span>
+              <span className="text-muted text-sm">{formatDisciplines(athlete.disciplines)}</span>
             </div>
           ))}
         </div>
