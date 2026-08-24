@@ -1,36 +1,48 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { Profile, Exercise, ExerciseFamily, ExerciseUnit, SessionWithExercises } from '../../types/database'
+import type { Profile, Exercise, ExerciseFamily, SessionWithExercises } from '../../types/database'
 import { FAMILY_LABELS } from '../../lib/exerciseLabels'
 
-// ─── Exercise entry (draft) ────────────────────────────────────────────────────
+// ─── ExEntry (draft state per exercise) ───────────────────────────────────────
 interface ExEntry {
   exercise: Exercise
+  // Volume
   sets: string
   reps: string
-  value: string       // kg / m / s depending on unit
-  rest_seconds: string
-  intensity: string
+  // Load / metrics
+  intensity: string      // charge libre (muscu) ou texte intensité (cardio)
+  distance: string       // → distance_meters
+  duration: string       // → duration_seconds
+  // Recovery (displayed in chosen unit, stored in seconds)
+  rest_value: string
+  rest_unit: 'min' | 's'
+  // Contextual — transversal
+  intention: string
+  technical_notes: string
   notes: string
 }
 
-function emptyEntry(ex: Exercise): ExEntry {
-  return { exercise: ex, sets: '', reps: '', value: '', rest_seconds: '', intensity: '', notes: '' }
+function restFromSeconds(s: number | null): Pick<ExEntry, 'rest_value' | 'rest_unit'> {
+  if (!s) return { rest_value: '', rest_unit: 's' }
+  if (s >= 60 && s % 60 === 0) return { rest_value: String(s / 60), rest_unit: 'min' }
+  return { rest_value: String(s), rest_unit: 's' }
 }
 
-function valueLabel(unit: ExerciseUnit | null): string | null {
-  if (unit === 'kg') return 'Charge (kg)'
-  if (unit === 'm')  return 'Distance (m)'
-  if (unit === 's')  return 'Durée (s)'
-  return null
+function emptyEntry(ex: Exercise): ExEntry {
+  return {
+    exercise: ex,
+    sets: '', reps: '', intensity: '', distance: '', duration: '',
+    rest_value: '', rest_unit: 's',
+    intention: '', technical_notes: '', notes: '',
+  }
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
   coachId: string
   athletes: Profile[]
-  defaultDate?: string   // YYYY-MM-DD
-  session?: SessionWithExercises | null  // if set → edit mode
+  defaultDate?: string
+  session?: SessionWithExercises | null
   onClose: () => void
   onSaved: () => void
 }
@@ -48,7 +60,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
   const [coachNotes, setCoachNotes]   = useState(session?.coach_notes ?? '')
   const [isRevealed, setIsRevealed]   = useState(session?.is_revealed ?? true)
 
-  // Athlete selection (multi for create, locked for edit)
+  // Athlete selection
   const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>(
     session ? [session.athlete_id] : athletes.length === 1 ? [athletes[0].id] : []
   )
@@ -68,20 +80,25 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         musculation_cycle: null,
         created_at: '',
       }
+      const { rest_value, rest_unit } = restFromSeconds(se.rest_seconds)
       return {
         exercise: ex,
         sets: se.sets?.toString() ?? '',
         reps: se.reps?.toString() ?? '',
-        value: se.distance_meters?.toString() ?? se.duration_seconds?.toString() ?? se.intensity ?? '',
-        rest_seconds: se.rest_seconds?.toString() ?? '',
         intensity: se.intensity ?? '',
+        distance: se.distance_meters?.toString() ?? '',
+        duration: se.duration_seconds?.toString() ?? '',
+        rest_value,
+        rest_unit,
+        intention: se.intention ?? '',
+        technical_notes: se.technical_notes ?? '',
         notes: se.notes ?? '',
       }
     }) ?? []
   )
 
   // Exercise picker
-  const [showPicker, setShowPicker] = useState(false)
+  const [showPicker, setShowPicker]     = useState(false)
   const [pickerSearch, setPickerSearch] = useState('')
   const [pickerFamily, setPickerFamily] = useState<ExerciseFamily | 'all'>('all')
   const [allExercises, setAllExercises] = useState<Exercise[]>([])
@@ -146,7 +163,6 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
 
     try {
       if (isEdit) {
-        // Update existing session
         const { error: ue } = await supabase.from('sessions').update({
           title: title.trim(),
           scheduled_date: date,
@@ -158,13 +174,9 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         }).eq('id', session!.id)
         if (ue) throw ue
 
-        // Replace exercises
         await supabase.from('session_exercises').delete().eq('session_id', session!.id)
-        if (entries.length > 0) {
-          await insertExercises(session!.id)
-        }
+        if (entries.length > 0) await insertExercises(session!.id)
       } else {
-        // Create one session per athlete
         for (const athleteId of targets) {
           const { data: newSession, error: ie } = await supabase.from('sessions').insert({
             coach_id: coachId,
@@ -178,9 +190,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
             is_revealed: isRevealed,
           }).select().single()
           if (ie) throw ie
-          if (newSession && entries.length > 0) {
-            await insertExercises(newSession.id)
-          }
+          if (newSession && entries.length > 0) await insertExercises(newSession.id)
         }
       }
       onSaved()
@@ -193,7 +203,9 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
 
   async function insertExercises(sessionId: string) {
     const rows = entries.map((e, i) => {
-      const u = e.exercise.default_unit
+      const restS = e.rest_value
+        ? (e.rest_unit === 'min' ? parseInt(e.rest_value) * 60 : parseInt(e.rest_value))
+        : null
       return {
         session_id: sessionId,
         exercise_id: e.exercise.id || null,
@@ -201,10 +213,12 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         order_index: i,
         sets: e.sets ? parseInt(e.sets) : null,
         reps: e.reps ? parseInt(e.reps) : null,
-        distance_meters: u === 'm' && e.value ? parseInt(e.value) : null,
-        duration_seconds: u === 's' && e.value ? parseInt(e.value) : null,
-        rest_seconds: e.rest_seconds ? parseInt(e.rest_seconds) : null,
-        intensity: u === 'kg' && e.value ? `${e.value} kg` : (e.intensity || null),
+        distance_meters: e.distance ? parseInt(e.distance) : null,
+        duration_seconds: e.duration ? parseInt(e.duration) : null,
+        rest_seconds: restS,
+        intensity: e.intensity || null,
+        intention: e.intention || null,
+        technical_notes: e.technical_notes || null,
         notes: e.notes || null,
       }
     })
@@ -217,7 +231,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
 
-        {/* Modal header */}
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-ink font-semibold">{isEdit ? 'Modifier la séance' : 'Nouvelle séance'}</h2>
           <button onClick={onClose} className="text-muted hover:text-ink transition-colors">
@@ -227,11 +241,11 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
           </button>
         </div>
 
-        {/* Scrollable body */}
+        {/* Body */}
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100">
 
-            {/* ── Left column : metadata ─────────────────────────────────── */}
+            {/* ── Left : session metadata ────────────────────────────────── */}
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-xs text-muted mb-1.5">Titre *</label>
@@ -281,8 +295,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                   <label className="block text-xs text-muted mb-2">Athlètes *</label>
                   <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-36 overflow-y-auto">
                     <label className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors">
-                      <input type="checkbox" checked={allSelected} onChange={toggleAll}
-                        className="accent-brand" />
+                      <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-brand" />
                       <span className="text-sm font-medium text-ink">Tout le groupe ({athletes.length})</span>
                     </label>
                     {athletes.map(a => (
@@ -296,9 +309,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                     ))}
                   </div>
                   {selectedAthleteIds.length > 1 && (
-                    <p className="text-xs text-muted mt-1.5">
-                      {selectedAthleteIds.length} séances seront créées
-                    </p>
+                    <p className="text-xs text-muted mt-1.5">{selectedAthleteIds.length} séances seront créées</p>
                   )}
                 </div>
               )}
@@ -315,7 +326,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
               </label>
             </div>
 
-            {/* ── Right column : exercises ───────────────────────────────── */}
+            {/* ── Right : exercises ──────────────────────────────────────── */}
             <div className="p-6 flex flex-col gap-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-medium text-muted uppercase tracking-wide">Exercices</p>
@@ -359,40 +370,22 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                 </div>
               )}
 
-              {/* Exercise entries */}
               {entries.length === 0 && !showPicker && (
                 <div className="flex-1 flex items-center justify-center">
                   <p className="text-muted text-sm">Aucun exercice ajouté</p>
                 </div>
               )}
+
               <div className="space-y-2 overflow-y-auto flex-1">
-                {entries.map((entry, i) => {
-                  const vLabel = valueLabel(entry.exercise.default_unit)
-                  return (
-                    <div key={i} className="border border-gray-100 rounded-xl p-3 bg-gray-50/50">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-ink">{i + 1}. {entry.exercise.name}</span>
-                        <button type="button" onClick={() => removeEntry(i)} className="text-muted hover:text-accent transition-colors">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <ExField label="Séries" value={entry.sets} onChange={v => updateEntry(i, 'sets', v)} />
-                        <ExField label="Répétitions" value={entry.reps} onChange={v => updateEntry(i, 'reps', v)} />
-                        {vLabel
-                          ? <ExField label={vLabel} value={entry.value} onChange={v => updateEntry(i, 'value', v)} />
-                          : <ExField label="Intensité" value={entry.intensity} onChange={v => updateEntry(i, 'intensity', v)} />
-                        }
-                        <ExField label="Récup (s)" value={entry.rest_seconds} onChange={v => updateEntry(i, 'rest_seconds', v)} />
-                        <div className="col-span-2">
-                          <ExField label="Notes" value={entry.notes} onChange={v => updateEntry(i, 'notes', v)} />
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+                {entries.map((entry, i) => (
+                  <ExerciseCard
+                    key={i}
+                    entry={entry}
+                    index={i}
+                    onRemove={() => removeEntry(i)}
+                    onUpdate={(k, v) => updateEntry(i, k, v)}
+                  />
+                ))}
               </div>
             </div>
           </div>
@@ -400,10 +393,10 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
-          {error && <p className="text-accent text-sm">{error}</p>}
-          {!error && <span />}
+          {error ? <p className="text-accent text-sm">{error}</p> : <span />}
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="text-sm text-muted hover:text-ink transition-colors px-4 py-2">
+            <button type="button" onClick={onClose}
+              className="text-sm text-muted hover:text-ink transition-colors px-4 py-2">
               Annuler
             </button>
             <button
@@ -421,12 +414,139 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
   )
 }
 
-function ExField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+// ─── Exercise entry card ───────────────────────────────────────────────────────
+function ExerciseCard({ entry, index, onRemove, onUpdate }: {
+  entry: ExEntry
+  index: number
+  onRemove: () => void
+  onUpdate: <K extends keyof ExEntry>(k: K, v: ExEntry[K]) => void
+}) {
+  const f = entry.exercise.family
+
+  const isMuscu     = f === 'musculation' || f === 'plyometrie'
+  const isDiscipline = f === 'discipline'
+  const isCardio    = f === 'cardio_aerobie'
+  const isGainage   = f === 'gainage_prehab'
+  // null family (loaded from edit without exercise join) → show all fields
+  const isUnknown   = f === null
+
+  const showSetsReps    = isMuscu || isGainage || isUnknown
+  const showDistance    = isDiscipline || isCardio || isUnknown
+  const showDuration    = isDiscipline || isCardio || isGainage || isUnknown
+  const showIntensity   = isMuscu || isCardio || isUnknown
+  const showRest        = !isGainage || isUnknown
+  const showTechNotes   = isDiscipline || isUnknown
+
+  return (
+    <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/50 space-y-2.5">
+
+      {/* Name row */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-ink">{index + 1}. {entry.exercise.name}</span>
+        <button type="button" onClick={onRemove} className="text-muted hover:text-accent transition-colors shrink-0">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Intention — always, full width, visually accented */}
+      <div>
+        <label className="block text-xs font-semibold text-brand mb-1">Intention</label>
+        <input
+          value={entry.intention}
+          onChange={e => onUpdate('intention', e.target.value)}
+          placeholder="Ex : Travail de relâchement, Vitesse maximale…"
+          className="w-full border border-brand/25 bg-white rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors"
+        />
+      </div>
+
+      {/* Metric fields grid */}
+      <div className="grid grid-cols-3 gap-2">
+        {showSetsReps && (
+          <>
+            <ExField label="Séries" value={entry.sets} onChange={v => onUpdate('sets', v)} />
+            <ExField label="Répétitions" value={entry.reps} onChange={v => onUpdate('reps', v)} />
+          </>
+        )}
+
+        {showDistance && (
+          <ExField label="Distance (m)" value={entry.distance} onChange={v => onUpdate('distance', v)} />
+        )}
+
+        {showDuration && (
+          <ExField label="Durée (s)" value={entry.duration} onChange={v => onUpdate('duration', v)} />
+        )}
+
+        {showIntensity && (
+          <ExField
+            label={isMuscu ? 'Charge' : 'Intensité'}
+            value={entry.intensity}
+            onChange={v => onUpdate('intensity', v)}
+            placeholder={isMuscu ? '80 kg' : ''}
+          />
+        )}
+
+        {/* Récup — paired input + unit selector */}
+        {showRest && (
+          <div>
+            <label className="block text-xs text-muted mb-1">Récupération</label>
+            <div className="flex gap-1">
+              <input
+                value={entry.rest_value}
+                onChange={e => onUpdate('rest_value', e.target.value)}
+                placeholder="90"
+                className="min-w-0 flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+              />
+              <select
+                value={entry.rest_unit}
+                onChange={e => onUpdate('rest_unit', e.target.value as 'min' | 's')}
+                className="shrink-0 border border-gray-200 rounded-md px-1.5 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+              >
+                <option value="s">s</option>
+                <option value="min">min</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Notes techniques — discipline only, full width textarea */}
+      {showTechNotes && (
+        <div>
+          <label className="block text-xs text-muted mb-1">Notes techniques</label>
+          <textarea
+            value={entry.technical_notes}
+            onChange={e => onUpdate('technical_notes', e.target.value)}
+            rows={2}
+            placeholder="Ex : élan réduit 4 foulées, plots à 8 m, départ haut…"
+            className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink resize-none focus:outline-none focus:border-brand transition-colors bg-white"
+          />
+        </div>
+      )}
+
+      {/* Notes — always */}
+      <ExField label="Notes" value={entry.notes} onChange={v => onUpdate('notes', v)} />
+    </div>
+  )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function ExField({ label, value, onChange, placeholder }: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
   return (
     <div>
       <label className="block text-xs text-muted mb-1">{label}</label>
-      <input value={value} onChange={e => onChange(e.target.value)}
-        className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white" />
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+      />
     </div>
   )
 }

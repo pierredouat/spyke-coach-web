@@ -187,6 +187,8 @@ export type Database = {
           duration_seconds: number | null
           rest_seconds: number | null
           intensity: string | null
+          intention: string | null
+          technical_notes: string | null
           notes: string | null
           created_at: string
         }
@@ -202,6 +204,8 @@ export type Database = {
           duration_seconds?: number | null
           rest_seconds?: number | null
           intensity?: string | null
+          intention?: string | null
+          technical_notes?: string | null
           notes?: string | null
           created_at?: string
         }
@@ -217,6 +221,8 @@ export type Database = {
           duration_seconds?: number | null
           rest_seconds?: number | null
           intensity?: string | null
+          intention?: string | null
+          technical_notes?: string | null
           notes?: string | null
           created_at?: string
         }
@@ -267,6 +273,8 @@ export type SessionExercise = {
   duration_seconds: number | null
   rest_seconds: number | null
   intensity: string | null
+  intention: string | null
+  technical_notes: string | null
   notes: string | null
   created_at: string
 }
