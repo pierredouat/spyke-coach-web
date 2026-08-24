@@ -1,5 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
 const navItems = [
@@ -45,12 +44,6 @@ const navItems = [
 
 export default function Sidebar() {
   const { profile } = useAuth()
-  const navigate = useNavigate()
-
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    navigate('/login')
-  }
 
   return (
     <aside className="w-60 min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col fixed left-0 top-0 bottom-0">
@@ -89,24 +82,27 @@ export default function Sidebar() {
         )}
       </nav>
 
-      <div className="px-3 py-4 border-t border-sidebar-border">
-        {profile && (
-          <div className="px-3 mb-3">
-            <p className="text-white text-sm font-medium truncate">
-              {[profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Coach'}
-            </p>
-            {profile.club && <p className="text-muted text-xs truncate mt-0.5">{profile.club}</p>}
-          </div>
-        )}
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-muted hover:text-white hover:bg-white/5 transition-colors text-sm"
+      <div className="px-3 py-3 border-t border-sidebar-border">
+        <NavLink
+          to="/profile"
+          className={({ isActive }) =>
+            `flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors ${
+              isActive
+                ? 'bg-brand/15 text-brand'
+                : 'text-muted hover:text-white hover:bg-white/5'
+            }`
+          }
         >
-          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Déconnexion
-        </button>
+          <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-xs font-semibold">
+            {(profile?.first_name ?? profile?.last_name ?? 'C').charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">
+              {[profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Mon profil'}
+            </p>
+            {profile?.club && <p className="text-xs text-muted/70 truncate">{profile.club}</p>}
+          </div>
+        </NavLink>
       </div>
     </aside>
   )
