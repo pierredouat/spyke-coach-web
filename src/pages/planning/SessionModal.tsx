@@ -112,6 +112,18 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
     })
   }, [])
 
+  // Enrich edit-mode entries with the real exercise family once the bank is loaded.
+  // session_exercises doesn't carry family; we look it up by exercise_id.
+  useEffect(() => {
+    if (!session || allExercises.length === 0) return
+    setEntries(prev => prev.map(e => {
+      if (e.exercise.family !== null || !e.exercise.id) return e
+      const found = allExercises.find(ax => ax.id === e.exercise.id)
+      if (!found) return e
+      return { ...e, exercise: { ...e.exercise, family: found.family } }
+    }))
+  }, [allExercises, session])
+
   // ── Athlete helpers ─────────────────────────────────────────────────────────
   function toggleAthlete(id: string) {
     setAllSelected(false)
@@ -435,7 +447,7 @@ function ExerciseCard({ entry, index, onRemove, onUpdate }: {
   const showDuration    = isDiscipline || isCardio || isGainage || isUnknown
   const showIntensity   = isMuscu || isCardio || isUnknown
   const showRest        = !isGainage || isUnknown
-  const showTechNotes   = isDiscipline || isUnknown
+  const showTechNotes   = isDiscipline
 
   return (
     <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/50 space-y-2.5">
@@ -525,8 +537,10 @@ function ExerciseCard({ entry, index, onRemove, onUpdate }: {
         </div>
       )}
 
-      {/* Notes — always */}
-      <ExField label="Notes" value={entry.notes} onChange={v => onUpdate('notes', v)} />
+      {/* Notes — all families except discipline (which has Notes techniques instead) */}
+      {!isDiscipline && (
+        <ExField label="Notes" value={entry.notes} onChange={v => onUpdate('notes', v)} />
+      )}
     </div>
   )
 }
