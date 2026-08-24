@@ -7,6 +7,7 @@ export type ExerciseFamily = 'discipline' | 'musculation' | 'plyometrie' | 'gain
 export type ExerciseDisciplineGroup = 'sprint' | 'sauts' | 'lancers' | 'demi_fond' | 'haies' | 'combines' | 'marche'
 export type MuscuCycle = 'force' | 'puissance' | 'vitesse' | 'hypertrophie'
 export type ExerciseUnit = 'kg' | 's' | 'm' | 'reps' | 'points'
+export type SessionStatus = 'a_faire' | 'en_cours' | 'termine' | 'modifie'
 
 export type Database = {
   public: {
@@ -122,6 +123,105 @@ export type Database = {
         }
         Relationships: []
       }
+      sessions: {
+        Row: {
+          id: string
+          plan_id: string | null
+          coach_id: string
+          athlete_id: string
+          scheduled_date: string
+          title: string
+          description: string | null
+          location: string | null
+          estimated_duration_minutes: number | null
+          status: SessionStatus
+          coach_notes: string | null
+          is_revealed: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          plan_id?: string | null
+          coach_id: string
+          athlete_id: string
+          scheduled_date: string
+          title: string
+          description?: string | null
+          location?: string | null
+          estimated_duration_minutes?: number | null
+          status?: SessionStatus
+          coach_notes?: string | null
+          is_revealed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          plan_id?: string | null
+          coach_id?: string
+          athlete_id?: string
+          scheduled_date?: string
+          title?: string
+          description?: string | null
+          location?: string | null
+          estimated_duration_minutes?: number | null
+          status?: SessionStatus
+          coach_notes?: string | null
+          is_revealed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      session_exercises: {
+        Row: {
+          id: string
+          session_id: string
+          exercise_id: string | null
+          order_index: number
+          name: string
+          sets: number | null
+          reps: number | null
+          distance_meters: number | null
+          duration_seconds: number | null
+          rest_seconds: number | null
+          intensity: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          exercise_id?: string | null
+          order_index: number
+          name: string
+          sets?: number | null
+          reps?: number | null
+          distance_meters?: number | null
+          duration_seconds?: number | null
+          rest_seconds?: number | null
+          intensity?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          exercise_id?: string | null
+          order_index?: number
+          name?: string
+          sets?: number | null
+          reps?: number | null
+          distance_meters?: number | null
+          duration_seconds?: number | null
+          rest_seconds?: number | null
+          intensity?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -137,6 +237,41 @@ export type Database = {
     }
   }
 }
+
+export type Session = {
+  id: string
+  plan_id: string | null
+  coach_id: string
+  athlete_id: string
+  scheduled_date: string
+  title: string
+  description: string | null
+  location: string | null
+  estimated_duration_minutes: number | null
+  status: SessionStatus
+  coach_notes: string | null
+  is_revealed: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type SessionExercise = {
+  id: string
+  session_id: string
+  exercise_id: string | null
+  order_index: number
+  name: string
+  sets: number | null
+  reps: number | null
+  distance_meters: number | null
+  duration_seconds: number | null
+  rest_seconds: number | null
+  intensity: string | null
+  notes: string | null
+  created_at: string
+}
+
+export type SessionWithExercises = Session & { session_exercises: SessionExercise[] }
 
 export type Profile = Database['public']['Tables']['profiles']['Row']
 export type CoachAthleteRelationship = Database['public']['Tables']['coach_athlete_relationships']['Row']

@@ -8,6 +8,7 @@ import OverviewPage from './pages/dashboard/OverviewPage'
 import AthletesPage from './pages/athletes/AthletesPage'
 import ProfilePage from './pages/profile/ProfilePage'
 import ExercisesPage from './pages/exercises/ExercisesPage'
+import PlanningPage from './pages/planning/PlanningPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -73,6 +74,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <DashboardLayout>
               <ExercisesPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/planning"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <PlanningPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

@@ -23,7 +23,6 @@ const navItems = [
   {
     to: '/planning',
     label: 'Planning',
-    disabled: true,
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -52,33 +51,23 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {navItems.map(item =>
-          item.disabled ? (
-            <div
-              key={item.to}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted/40 cursor-not-allowed select-none"
-            >
-              <span className="shrink-0">{item.icon}</span>
-              <span className="text-sm font-medium">{item.label}</span>
-            </div>
-          ) : (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-brand/15 text-brand'
-                    : 'text-muted hover:text-white hover:bg-white/5'
-                }`
-              }
-            >
-              <span className="shrink-0">{item.icon}</span>
-              <span className="text-sm font-medium">{item.label}</span>
-            </NavLink>
-          )
-        )}
+        {navItems.map(item => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                isActive
+                  ? 'bg-brand/15 text-brand'
+                  : 'text-muted hover:text-white hover:bg-white/5'
+              }`
+            }
+          >
+            <span className="shrink-0">{item.icon}</span>
+            <span className="text-sm font-medium">{item.label}</span>
+          </NavLink>
+        ))}
       </nav>
 
       <div className="px-3 py-3 border-t border-sidebar-border">
