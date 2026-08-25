@@ -1,17 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Profile, SessionWithExercises } from '../../types/database'
+import type { Profile, SessionWithExercises, SessionExercise } from '../../types/database'
 import {
   formatYMD, addDays, addWeeks, addMonths,
-  getWeekStart, getWeekDays,
+  getWeekStart, getWeekDays, isSameDay,
   fmtMonthYear, fmtDayShort, fmtMonthShort,
 } from '../../lib/dates'
 import WeekView  from './views/WeekView'
 import DayView   from './views/DayView'
 import MonthView from './views/MonthView'
 import MacroView from './views/MacroView'
-import SessionModal from './SessionModal'
+import SessionModal       from './SessionModal'
+import DuplicateDayModal  from './DuplicateDayModal'
+import DuplicateWeekModal from './DuplicateWeekModal'
 
 // ─── Scale types ──────────────────────────────────────────────────────────────
 type Scale = 'day' | 'week' | 'month' | 'trimester' | 'year'
@@ -104,10 +106,18 @@ export default function PlanningPage() {
   const [sessions, setSessions] = useState<SessionWithExercises[]>([])
   const [loading, setLoading]   = useState(true)
 
-  // Modal state
+  // Session modal
   const [modalOpen, setModalOpen]       = useState(false)
   const [editSession, setEditSession]   = useState<SessionWithExercises | null>(null)
   const [defaultDate, setDefaultDate]   = useState<string | undefined>()
+
+  // Duplicate day modal
+  const [dupDayOpen, setDupDayOpen]       = useState(false)
+  const [dupDaySource, setDupDaySource]   = useState<Date | null>(null)
+  const [dupDaySessions, setDupDaySessions] = useState<SessionWithExercises[]>([])
+
+  // Duplicate week modal
+  const [dupWeekOpen, setDupWeekOpen] = useState(false)
 
   // ── Load athletes ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -170,6 +180,44 @@ export default function PlanningPage() {
   }
   function closeModal() { setModalOpen(false); setEditSession(null) }
   async function onSaved() { closeModal(); await loadSessions() }
+
+  // ── Duplicate day ────────────────────────────────────────────────────────
+  function openDuplicateDay(day: Date) {
+    const daySessions = sessions.filter(s =>
+      isSameDay(new Date(s.scheduled_date + 'T00:00:00'), day)
+    )
+    setDupDaySource(day)
+    setDupDaySessions(daySessions)
+    setDupDayOpen(true)
+  }
+
+  // ── Exercise move / copy (DnD from DayView) ──────────────────────────────
+  async function handleExerciseMove(ex: SessionExercise, _fromId: string, toId: string) {
+    const target = sessions.find(s => s.id === toId)
+    const newIdx = target ? target.session_exercises.length : 0
+    await supabase.from('session_exercises').delete().eq('id', ex.id)
+    await supabase.from('session_exercises').insert({
+      session_id: toId, exercise_id: ex.exercise_id, name: ex.name,
+      order_index: newIdx, sets: ex.sets, reps: ex.reps,
+      distance_meters: ex.distance_meters, duration_seconds: ex.duration_seconds,
+      rest_seconds: ex.rest_seconds, intensity: ex.intensity,
+      intention: ex.intention, technical_notes: ex.technical_notes, notes: ex.notes,
+    })
+    await loadSessions()
+  }
+
+  async function handleExerciseCopy(ex: SessionExercise, _fromId2: string, toId: string) {
+    const target = sessions.find(s => s.id === toId)
+    const newIdx = target ? target.session_exercises.length : 0
+    await supabase.from('session_exercises').insert({
+      session_id: toId, exercise_id: ex.exercise_id, name: ex.name,
+      order_index: newIdx, sets: ex.sets, reps: ex.reps,
+      distance_meters: ex.distance_meters, duration_seconds: ex.duration_seconds,
+      rest_seconds: ex.rest_seconds, intensity: ex.intensity,
+      intention: ex.intention, technical_notes: ex.technical_notes, notes: ex.notes,
+    })
+    await loadSessions()
+  }
 
   // ── Scale change — keep date in range ───────────────────────────────────
   function changeScale(s: Scale) {
@@ -264,6 +312,9 @@ export default function PlanningPage() {
               athletes={athletes}
               onSessionClick={openEdit}
               onCreateOnDay={openCreate}
+              onDuplicateDay={openDuplicateDay}
+              onExerciseMove={handleExerciseMove}
+              onExerciseCopy={handleExerciseCopy}
             />
           )}
 
@@ -276,6 +327,8 @@ export default function PlanningPage() {
               onDayClick={d => { setCurrentDate(d); changeScale('day') }}
               onSessionClick={openEdit}
               onCreateOnDay={openCreate}
+              onDuplicateDay={openDuplicateDay}
+              onDuplicateWeek={() => setDupWeekOpen(true)}
             />
           )}
 
@@ -301,7 +354,7 @@ export default function PlanningPage() {
         </>
       )}
 
-      {/* ── Modal ── */}
+      {/* ── Modals ── */}
       {modalOpen && user && (
         <SessionModal
           coachId={user.id}
@@ -310,6 +363,22 @@ export default function PlanningPage() {
           session={editSession}
           onClose={closeModal}
           onSaved={onSaved}
+        />
+      )}
+      {dupDayOpen && dupDaySource && (
+        <DuplicateDayModal
+          sourceDate={dupDaySource}
+          sessions={dupDaySessions}
+          onClose={() => setDupDayOpen(false)}
+          onDone={async () => { setDupDayOpen(false); await loadSessions() }}
+        />
+      )}
+      {dupWeekOpen && (
+        <DuplicateWeekModal
+          weekStart={getWeekStart(currentDate)}
+          sessions={sessions}
+          onClose={() => setDupWeekOpen(false)}
+          onDone={async () => { setDupWeekOpen(false); await loadSessions() }}
         />
       )}
     </div>
