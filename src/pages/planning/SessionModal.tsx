@@ -10,9 +10,10 @@ interface ExEntry {
   sets: string
   reps: string
   // Load / metrics
-  intensity: string      // charge libre (muscu) ou texte intensité (cardio)
-  distance: string       // → distance_meters
-  duration: string       // → duration_seconds
+  intensity: string           // charge libre (muscu) ou texte intensité (cardio)
+  intensity_unit: 'kg' | 'lbs' // displayed in chosen unit, always stored in kg
+  distance: string            // → distance_meters
+  duration: string            // → duration_seconds
   // Recovery (displayed in chosen unit, stored in seconds)
   rest_value: string
   rest_unit: 'min' | 's'
@@ -30,7 +31,7 @@ function restFromSeconds(s: number | null): Pick<ExEntry, 'rest_value' | 'rest_u
 function emptyEntry(ex: Exercise): ExEntry {
   return {
     exercise: ex,
-    sets: '', reps: '', intensity: '', distance: '', duration: '',
+    sets: '', reps: '', intensity: '', intensity_unit: 'kg', distance: '', duration: '',
     rest_value: '', rest_unit: 's',
     intention: '', notes: '',
   }
@@ -85,6 +86,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         sets: se.sets?.toString() ?? '',
         reps: se.reps?.toString() ?? '',
         intensity: se.intensity ?? '',
+        intensity_unit: 'kg',
         distance: se.distance_meters?.toString() ?? '',
         duration: se.duration_seconds?.toString() ?? '',
         rest_value,
@@ -100,6 +102,9 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
   const [pickerSearch, setPickerSearch] = useState('')
   const [pickerFamily, setPickerFamily] = useState<ExerciseFamily | 'all'>('all')
   const [allExercises, setAllExercises] = useState<Exercise[]>([])
+
+  const [createFamily, setCreateFamily] = useState<ExerciseFamily>('gainage_prehab')
+  const [creating, setCreating] = useState(false)
 
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
@@ -139,6 +144,25 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
     setEntries(prev => [...prev, emptyEntry(ex)])
     setShowPicker(false)
     setPickerSearch('')
+  }
+
+  async function createExercise() {
+    if (!pickerSearch.trim()) return
+    setCreating(true)
+    try {
+      const { data: newEx, error: ce } = await supabase
+        .from('exercises')
+        .insert({ name: pickerSearch.trim(), family: createFamily, coach_id: coachId })
+        .select()
+        .single()
+      if (ce) throw ce
+      setAllExercises(prev => [...prev, newEx])
+      addExercise(newEx)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (err as { message?: string })?.message ?? 'Erreur inconnue')
+    } finally {
+      setCreating(false)
+    }
   }
 
   function removeEntry(i: number) {
@@ -214,7 +238,14 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         distance_meters: e.distance ? parseInt(e.distance) : null,
         duration_seconds: e.duration ? parseInt(e.duration) : null,
         rest_seconds: restS,
-        intensity: e.intensity || null,
+        intensity: (() => {
+          if (!e.intensity) return null
+          if (e.intensity_unit === 'lbs') {
+            const num = parseFloat(e.intensity)
+            return isNaN(num) ? e.intensity : String(Math.round(num * 0.453592 * 100) / 100)
+          }
+          return e.intensity
+        })(),
         intention: e.intention || null,
         technical_notes: null,
         notes: e.notes || null,
@@ -354,16 +385,42 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                     ))}
                   </div>
                   <div className="max-h-40 overflow-y-auto">
-                    {filteredExercises.length === 0 && (
-                      <p className="text-center text-muted text-xs py-4">Aucun résultat</p>
+                    {filteredExercises.length === 0 ? (
+                      pickerSearch.trim() ? (
+                        <div className="px-3 py-3">
+                          <p className="text-xs text-muted mb-2">Aucun résultat — créer « {pickerSearch} » ?</p>
+                          <div className="flex gap-2">
+                            <select
+                              value={createFamily}
+                              onChange={e => setCreateFamily(e.target.value as ExerciseFamily)}
+                              className="flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand bg-white"
+                            >
+                              {(['discipline', 'musculation', 'plyometrie', 'gainage_prehab', 'cardio_aerobie'] as const).map(f => (
+                                <option key={f} value={f}>{FAMILY_LABELS[f]}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={createExercise}
+                              disabled={creating}
+                              className="shrink-0 bg-brand text-white text-xs px-3 py-1.5 rounded-md hover:bg-brand-hover transition-colors disabled:opacity-50"
+                            >
+                              {creating ? '…' : 'Créer'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-center text-muted text-xs py-4">Aucun résultat</p>
+                      )
+                    ) : (
+                      filteredExercises.map(ex => (
+                        <button key={ex.id} type="button" onClick={() => addExercise(ex)}
+                          className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-brand/10 transition-colors flex items-center gap-2">
+                          <span className="flex-1">{ex.name}</span>
+                          {ex.default_unit && <span className="text-xs text-muted shrink-0">{ex.default_unit}</span>}
+                        </button>
+                      ))
                     )}
-                    {filteredExercises.map(ex => (
-                      <button key={ex.id} type="button" onClick={() => addExercise(ex)}
-                        className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-brand/10 transition-colors flex items-center gap-2">
-                        <span className="flex-1">{ex.name}</span>
-                        {ex.default_unit && <span className="text-xs text-muted shrink-0">{ex.default_unit}</span>}
-                      </button>
-                    ))}
                   </div>
                 </div>
               )}
@@ -449,7 +506,26 @@ function ExerciseCard({ entry, index, onRemove, onUpdate }: {
         <ExField label="Répétitions"   value={entry.reps}      onChange={v => onUpdate('reps', v)} />
         <ExField label="Distance (m)"  value={entry.distance}  onChange={v => onUpdate('distance', v)} />
         <ExField label="Durée (s)"     value={entry.duration}  onChange={v => onUpdate('duration', v)} />
-        <ExField label="Intensité"     value={entry.intensity} onChange={v => onUpdate('intensity', v)} />
+        {/* Intensité — paired value + unit selector */}
+        <div>
+          <label className="block text-xs text-muted mb-1">Intensité</label>
+          <div className="flex gap-1">
+            <input
+              value={entry.intensity}
+              onChange={e => onUpdate('intensity', e.target.value)}
+              placeholder="80"
+              className="min-w-0 flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+            />
+            <select
+              value={entry.intensity_unit}
+              onChange={e => onUpdate('intensity_unit', e.target.value as 'kg' | 'lbs')}
+              className="shrink-0 border border-gray-200 rounded-md px-1.5 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+            >
+              <option value="kg">kg</option>
+              <option value="lbs">lbs</option>
+            </select>
+          </div>
+        </div>
 
         {/* Récup — paired value + unit selector */}
         <div>
