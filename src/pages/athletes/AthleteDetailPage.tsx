@@ -2,42 +2,51 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Profile, JournalCoachSummary } from '../../types/database'
+import type { Profile, JournalCoachSummary, SleepHoursEnum, SleepQualityTextEnum } from '../../types/database'
 import { formatYMD, addDays, parseYMD, fmtDay, fmtMonthShort } from '../../lib/dates'
 import { formatDisciplines } from '../../lib/disciplines'
 
+// ─── Sleep enum mappings ──────────────────────────────────────────────────────
+const SLEEP_HOURS_LABEL: Record<SleepHoursEnum, string> = {
+  less_6:  '< 6h',
+  '6_to_8': '6–8h',
+  more_8:  '> 8h',
+}
+const SLEEP_HOURS_VALUE: Record<SleepHoursEnum, number> = {
+  less_6:  1,
+  '6_to_8': 2,
+  more_8:  3,
+}
+const SLEEP_QUALITY_LABEL: Record<SleepQualityTextEnum, string> = {
+  agitated: 'Agité',
+  okay:     'Correct',
+  restful:  'Reposant',
+}
+
 // ─── Metric config ────────────────────────────────────────────────────────────
-const METRICS = [
+const NUMERIC_METRICS = [
   {
-    key:   'sleep_hours'    as const,
-    label: 'Sommeil',
-    unit:  'h',
-    color: '#3743BA',
-    scale: [4, 10] as [number, number],
-    invert: false, // higher = better
+    key:    'stress_level'    as const,
+    label:  'Stress',
+    unit:   '/5',
+    color:  '#D97706',
+    scale:  [1, 5] as [number, number],
+    invert: true,  // higher = worse
   },
   {
-    key:   'stress_level'   as const,
-    label: 'Stress',
-    unit:  '/5',
-    color: '#D97706',
-    scale: [1, 5] as [number, number],
-    invert: true, // higher = worse
-  },
-  {
-    key:   'soreness_level' as const,
-    label: 'Courbatures',
-    unit:  '/5',
-    color: '#C1592E',
-    scale: [1, 5] as [number, number],
+    key:    'soreness_level'  as const,
+    label:  'Courbatures',
+    unit:   '/5',
+    color:  '#C1592E',
+    scale:  [1, 5] as [number, number],
     invert: true,
   },
   {
-    key:   'motivation_level' as const,
-    label: 'Motivation',
-    unit:  '/5',
-    color: '#0D9488',
-    scale: [1, 5] as [number, number],
+    key:    'motivation_level' as const,
+    label:  'Motivation',
+    unit:   '/5',
+    color:  '#0D9488',
+    scale:  [1, 5] as [number, number],
     invert: false,
   },
 ]
@@ -94,16 +103,15 @@ function SparkLine({ data, color, scale }: {
   )
 }
 
-// ─── Metric card ──────────────────────────────────────────────────────────────
-function MetricCard({ metric, entries, days }: {
-  metric: typeof METRICS[number]
+// ─── Metric card (numeric: stress / soreness / motivation) ───────────────────
+function NumericMetricCard({ metric, entries, days }: {
+  metric: typeof NUMERIC_METRICS[number]
   entries: JournalCoachSummary[]
   days: number
 }) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  // Build a slot per day in range, fill with data or null
   const slots: (number | null)[] = Array.from({ length: days }, (_, i) => {
     const d = formatYMD(addDays(today, i - days + 1))
     const entry = entries.find(e => e.date === d)
@@ -113,25 +121,15 @@ function MetricCard({ metric, entries, days }: {
   const values = slots.filter((v): v is number => v !== null)
   const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
   const lastValue = values.at(-1) ?? null
-  const trend = values.length >= 4
-    ? (values.slice(-3).reduce((a, b) => a + b, 0) / 3) - (values.slice(0, Math.floor(values.length / 2)).reduce((a, b) => a + b, 0) / Math.floor(values.length / 2))
-    : 0
 
+  const half = Math.floor(values.length / 2)
+  const trend = values.length >= 4
+    ? (values.slice(-3).reduce((a, b) => a + b, 0) / 3) - (values.slice(0, half).reduce((a, b) => a + b, 0) / half)
+    : 0
   const trendSign = Math.abs(trend) < 0.2 ? 0 : trend > 0 ? 1 : -1
-  // For inverted metrics (stress/soreness), "up" is bad
   const trendColor = trendSign === 0
     ? 'text-muted'
-    : (metric.invert ? trendSign > 0 : trendSign < 0)
-      ? 'text-amber-600'
-      : 'text-emerald-600'
-
-  const trendLabel = trendSign === 0 ? '—' : trendSign > 0 ? '↑' : '↓'
-
-  const fmtVal = (v: number | null) => {
-    if (v === null) return '—'
-    if (metric.key === 'sleep_hours') return `${v.toFixed(1)}h`
-    return v.toFixed(1)
-  }
+    : (metric.invert ? trendSign > 0 : trendSign < 0) ? 'text-amber-600' : 'text-emerald-600'
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 p-4">
@@ -140,23 +138,81 @@ function MetricCard({ metric, entries, days }: {
           <p className="text-xs font-medium text-muted uppercase tracking-wide">{metric.label}</p>
           {avg !== null && (
             <p className="text-xl font-semibold text-ink mt-0.5">
-              {fmtVal(avg)}
-              <span className="text-xs font-normal text-muted ml-1">{metric.key === 'sleep_hours' ? 'moy.' : `moy.${metric.unit}`}</span>
+              {avg.toFixed(1)}
+              <span className="text-xs font-normal text-muted ml-1">moy{metric.unit}</span>
             </p>
           )}
         </div>
         <div className="text-right">
           {lastValue !== null && (
-            <p className="text-sm text-muted">Dernier : <span className="text-ink font-medium">{fmtVal(lastValue)}</span></p>
+            <p className="text-sm text-muted">Dernier : <span className="text-ink font-medium">{lastValue}</span></p>
           )}
-          {values.length >= 4 && (
-            <span className={`text-sm font-semibold ${trendColor}`}>{trendLabel}</span>
+          {values.length >= 4 && trendSign !== 0 && (
+            <span className={`text-sm font-semibold ${trendColor}`}>{trendSign > 0 ? '↑' : '↓'}</span>
           )}
         </div>
       </div>
-
       {values.length >= 2 ? (
         <SparkLine data={slots} color={metric.color} scale={metric.scale} />
+      ) : (
+        <div className="flex items-center justify-center h-16 rounded-lg bg-gray-50">
+          <p className="text-xs text-muted">Pas assez de données</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Sleep card (categorical enum) ───────────────────────────────────────────
+function SleepCard({ entries, days }: { entries: JournalCoachSummary[]; days: number }) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const hoursSlots: (number | null)[] = Array.from({ length: days }, (_, i) => {
+    const d = formatYMD(addDays(today, i - days + 1))
+    const entry = entries.find(e => e.date === d)
+    const h = entry?.sleep_hours ?? null
+    return h ? SLEEP_HOURS_VALUE[h] : null
+  })
+
+  const rawHours: (SleepHoursEnum | null)[] = Array.from({ length: days }, (_, i) => {
+    const d = formatYMD(addDays(today, i - days + 1))
+    return entries.find(e => e.date === d)?.sleep_hours ?? null
+  })
+
+  const lastHours = rawHours.filter(v => v !== null).at(-1) ?? null
+  const lastQuality = Array.from({ length: days }, (_, i) => {
+    const d = formatYMD(addDays(today, i - days + 1))
+    return entries.find(e => e.date === d)?.sleep_quality_text ?? null
+  }).filter(v => v !== null).at(-1) ?? null
+
+  const validCount = hoursSlots.filter(v => v !== null).length
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 p-4">
+      <div className="flex items-baseline justify-between mb-3">
+        <div>
+          <p className="text-xs font-medium text-muted uppercase tracking-wide">Sommeil</p>
+          {lastHours && (
+            <p className="text-xl font-semibold text-ink mt-0.5">
+              {SLEEP_HOURS_LABEL[lastHours]}
+              <span className="text-xs font-normal text-muted ml-1">dernier</span>
+            </p>
+          )}
+        </div>
+        {lastQuality && (
+          <p className="text-sm text-muted">
+            Qualité : <span className="text-ink font-medium">{SLEEP_QUALITY_LABEL[lastQuality]}</span>
+          </p>
+        )}
+      </div>
+      {validCount >= 2 ? (
+        <>
+          <SparkLine data={hoursSlots} color="#3743BA" scale={[1, 3]} />
+          <div className="flex justify-between mt-1 text-xs text-muted/60 px-0.5">
+            <span>&lt; 6h</span><span>6–8h</span><span>&gt; 8h</span>
+          </div>
+        </>
       ) : (
         <div className="flex items-center justify-center h-16 rounded-lg bg-gray-50">
           <p className="text-xs text-muted">Pas assez de données</p>
@@ -253,7 +309,7 @@ export default function AthleteDetailPage() {
     setLoading(true)
     supabase
       .from('journal_entries_coach_summary')
-      .select('athlete_id, date, sleep_hours, stress_level, soreness_level, motivation_level')
+      .select('athlete_id, date, sleep_hours, sleep_quality_text, stress_level, soreness_level, motivation_level')
       .eq('athlete_id', athleteId)
       .gte('date', from)
       .order('date', { ascending: true })
@@ -352,8 +408,9 @@ export default function AthleteDetailPage() {
           {entries.length > 0 && (
             <>
               <div className="grid grid-cols-2 gap-4 mb-2">
-                {METRICS.map(m => (
-                  <MetricCard key={m.key} metric={m} entries={entries} days={days} />
+                <SleepCard entries={entries} days={days} />
+                {NUMERIC_METRICS.map(m => (
+                  <NumericMetricCard key={m.key} metric={m} entries={entries} days={days} />
                 ))}
               </div>
               <DateStrip days={days} />

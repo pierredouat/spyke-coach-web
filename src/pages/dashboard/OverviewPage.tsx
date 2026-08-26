@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Profile, JournalCoachSummary } from '../../types/database'
+import type { Profile, JournalCoachSummary, SleepHoursEnum } from '../../types/database'
 import { formatYMD, addDays } from '../../lib/dates'
 import { formatDisciplines } from '../../lib/disciplines'
 
@@ -21,16 +21,18 @@ function computeSignal(entries: JournalCoachSummary[]): FatigueSignal {
     const v = arr.filter((x): x is number => x !== null)
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null
   }
-  const stress    = avg(recent.map(e => e.stress_level))
-  const soreness  = avg(recent.map(e => e.soreness_level))
-  const motiv     = avg(recent.map(e => e.motivation_level))
-  const sleep     = avg(recent.map(e => e.sleep_hours))
+  const stress   = avg(recent.map(e => e.stress_level))
+  const soreness = avg(recent.map(e => e.soreness_level))
+  const motiv    = avg(recent.map(e => e.motivation_level))
+  // sleep_hours is an enum — alert if majority of recent entries report < 6h
+  const sleepValues = recent.map(e => e.sleep_hours).filter((v): v is SleepHoursEnum => v !== null)
+  const lowSleep = sleepValues.length > 0 && sleepValues.filter(v => v === 'less_6').length > sleepValues.length / 2
 
   if (
     (stress !== null && stress >= 4) ||
     (soreness !== null && soreness >= 4) ||
     (motiv !== null && motiv <= 2) ||
-    (sleep !== null && sleep < 6)
+    lowSleep
   ) return 'alert'
 
   return 'ok'
@@ -78,7 +80,7 @@ export default function OverviewPage() {
       supabase.from('profiles').select('*').in('id', athleteIds),
       supabase
         .from('journal_entries_coach_summary')
-        .select('athlete_id, date, sleep_hours, stress_level, soreness_level, motivation_level')
+        .select('athlete_id, date, sleep_hours, sleep_quality_text, stress_level, soreness_level, motivation_level')
         .in('athlete_id', athleteIds)
         .gte('date', formatYMD(addDays(new Date(), -5)))
         .order('date', { ascending: true }),

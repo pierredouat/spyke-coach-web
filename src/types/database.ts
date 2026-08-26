@@ -3,6 +3,8 @@ export type Json = string | number | boolean | null | { [key: string]: Json } | 
 export type UserRole = 'athlete' | 'coach'
 export type Discipline = 'sprint' | 'demi_fond' | 'fond' | 'sauts' | 'lancers' | 'combines' | 'marche'
 export type RelationshipStatus = 'pending' | 'active' | 'inactive'
+export type SleepHoursEnum = 'less_6' | '6_to_8' | 'more_8'
+export type SleepQualityTextEnum = 'agitated' | 'okay' | 'restful'
 export type ExerciseFamily = 'discipline' | 'musculation' | 'plyometrie' | 'gainage_prehab' | 'cardio_aerobie'
 export type ExerciseDisciplineGroup = 'sprint' | 'sauts' | 'lancers' | 'demi_fond' | 'haies' | 'combines' | 'marche'
 export type MuscuCycle = 'force' | 'puissance' | 'vitesse' | 'hypertrophie'
@@ -230,7 +232,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      journal_entries_coach_summary: {
+        Row: {
+          athlete_id:        string
+          date:              string
+          sleep_hours:       SleepHoursEnum | null
+          sleep_quality_text: SleepQualityTextEnum | null
+          stress_level:      number | null
+          soreness_level:    number | null
+          motivation_level:  number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
@@ -286,11 +299,4 @@ export type CoachAthleteRelationship = Database['public']['Tables']['coach_athle
 export type Exercise = Database['public']['Tables']['exercises']['Row']
 
 // View: journal_entries_coach_summary — only whitelisted fields, never raw journal_entries
-export type JournalCoachSummary = {
-  athlete_id: string
-  date: string           // 'YYYY-MM-DD'
-  sleep_hours: number | null
-  stress_level: number | null
-  soreness_level: number | null
-  motivation_level: number | null
-}
+export type JournalCoachSummary = Database['public']['Views']['journal_entries_coach_summary']['Row']
