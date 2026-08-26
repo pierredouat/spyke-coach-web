@@ -103,6 +103,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
   const [pickerFamily, setPickerFamily] = useState<ExerciseFamily | 'all'>('all')
   const [allExercises, setAllExercises] = useState<Exercise[]>([])
 
+  const [createName, setCreateName]   = useState('')
   const [createFamily, setCreateFamily] = useState<ExerciseFamily>('gainage_prehab')
   const [creating, setCreating] = useState(false)
 
@@ -147,16 +148,18 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
   }
 
   async function createExercise() {
-    if (!pickerSearch.trim()) return
+    const name = createName.trim() || pickerSearch.trim()
+    if (!name) return
     setCreating(true)
     try {
       const { data: newEx, error: ce } = await supabase
         .from('exercises')
-        .insert({ name: pickerSearch.trim(), family: createFamily, coach_id: coachId })
+        .insert({ name, family: createFamily, coach_id: coachId })
         .select()
         .single()
       if (ce) throw ce
       setAllExercises(prev => [...prev, newEx])
+      setCreateName('')
       addExercise(newEx)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : (err as { message?: string })?.message ?? 'Erreur inconnue')
@@ -386,32 +389,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                   </div>
                   <div className="max-h-40 overflow-y-auto">
                     {filteredExercises.length === 0 ? (
-                      pickerSearch.trim() ? (
-                        <div className="px-3 py-3">
-                          <p className="text-xs text-muted mb-2">Aucun résultat — créer « {pickerSearch} » ?</p>
-                          <div className="flex gap-2">
-                            <select
-                              value={createFamily}
-                              onChange={e => setCreateFamily(e.target.value as ExerciseFamily)}
-                              className="flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand bg-white"
-                            >
-                              {(['discipline', 'musculation', 'plyometrie', 'gainage_prehab', 'cardio_aerobie'] as const).map(f => (
-                                <option key={f} value={f}>{FAMILY_LABELS[f]}</option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={createExercise}
-                              disabled={creating}
-                              className="shrink-0 bg-brand text-white text-xs px-3 py-1.5 rounded-md hover:bg-brand-hover transition-colors disabled:opacity-50"
-                            >
-                              {creating ? '…' : 'Créer'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-center text-muted text-xs py-4">Aucun résultat</p>
-                      )
+                      <p className="text-center text-muted text-xs py-4">Aucun résultat</p>
                     ) : (
                       filteredExercises.map(ex => (
                         <button key={ex.id} type="button" onClick={() => addExercise(ex)}
@@ -421,6 +399,33 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                         </button>
                       ))
                     )}
+                  </div>
+                  {/* Always-visible create footer */}
+                  <div className="border-t border-gray-100 bg-white px-2 py-2 flex gap-2 items-center">
+                    <span className="text-xs text-muted shrink-0">Créer</span>
+                    <input
+                      value={createName}
+                      onChange={e => setCreateName(e.target.value)}
+                      placeholder={pickerSearch || 'Nom du nouvel exercice…'}
+                      className="min-w-0 flex-1 border border-gray-200 rounded-md px-2 py-1 text-xs text-ink focus:outline-none focus:border-brand bg-gray-50"
+                    />
+                    <select
+                      value={createFamily}
+                      onChange={e => setCreateFamily(e.target.value as ExerciseFamily)}
+                      className="shrink-0 border border-gray-200 rounded-md px-1.5 py-1 text-xs text-ink focus:outline-none focus:border-brand bg-gray-50"
+                    >
+                      {(['discipline', 'musculation', 'plyometrie', 'gainage_prehab', 'cardio_aerobie'] as const).map(f => (
+                        <option key={f} value={f}>{FAMILY_LABELS[f]}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={createExercise}
+                      disabled={creating || (!createName.trim() && !pickerSearch.trim())}
+                      className="shrink-0 bg-brand text-white text-xs px-2.5 py-1 rounded-md hover:bg-brand-hover transition-colors disabled:opacity-40"
+                    >
+                      {creating ? '…' : '+ Créer'}
+                    </button>
                   </div>
                 </div>
               )}

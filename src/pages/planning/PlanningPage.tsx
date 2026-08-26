@@ -191,6 +191,47 @@ export default function PlanningPage() {
     setDupDayOpen(true)
   }
 
+  // ── Session move / copy (DnD from WeekView) ─────────────────────────────
+  async function handleSessionMove(sessionId: string, newDate: string) {
+    await supabase.from('sessions').update({ scheduled_date: newDate }).eq('id', sessionId)
+    await loadSessions()
+  }
+
+  async function handleSessionCopy(session: SessionWithExercises, newDate: string) {
+    const { data: newSession, error } = await supabase.from('sessions').insert({
+      coach_id: user!.id,
+      athlete_id: session.athlete_id,
+      title: session.title,
+      scheduled_date: newDate,
+      estimated_duration_minutes: session.estimated_duration_minutes,
+      location: session.location,
+      description: session.description,
+      coach_notes: session.coach_notes,
+      is_revealed: session.is_revealed,
+    }).select().single()
+    if (error || !newSession) return
+    if (session.session_exercises.length > 0) {
+      await supabase.from('session_exercises').insert(
+        session.session_exercises.map((ex, i) => ({
+          session_id: newSession.id,
+          exercise_id: ex.exercise_id,
+          name: ex.name,
+          order_index: i,
+          sets: ex.sets,
+          reps: ex.reps,
+          distance_meters: ex.distance_meters,
+          duration_seconds: ex.duration_seconds,
+          rest_seconds: ex.rest_seconds,
+          intensity: ex.intensity,
+          intention: ex.intention,
+          technical_notes: ex.technical_notes,
+          notes: ex.notes,
+        }))
+      )
+    }
+    await loadSessions()
+  }
+
   // ── Exercise move / copy (DnD from DayView) ──────────────────────────────
   async function handleExerciseMove(ex: SessionExercise, _fromId: string, toId: string) {
     const target = sessions.find(s => s.id === toId)
@@ -329,6 +370,8 @@ export default function PlanningPage() {
               onCreateOnDay={openCreate}
               onDuplicateDay={openDuplicateDay}
               onDuplicateWeek={() => setDupWeekOpen(true)}
+              onSessionMove={handleSessionMove}
+              onSessionCopy={handleSessionCopy}
             />
           )}
 
