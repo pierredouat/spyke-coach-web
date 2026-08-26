@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 const navItems = [
   {
     to: '/',
+    end: true,
     label: "Vue d'ensemble",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -55,7 +56,7 @@ export default function Sidebar() {
           <NavLink
             key={item.to}
             to={item.to}
-            end
+            end={'end' in item ? item.end : false}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
                 isActive

@@ -284,3 +284,13 @@ export type SessionWithExercises = Session & { session_exercises: SessionExercis
 export type Profile = Database['public']['Tables']['profiles']['Row']
 export type CoachAthleteRelationship = Database['public']['Tables']['coach_athlete_relationships']['Row']
 export type Exercise = Database['public']['Tables']['exercises']['Row']
+
+// View: journal_entries_coach_summary — only whitelisted fields, never raw journal_entries
+export type JournalCoachSummary = {
+  athlete_id: string
+  date: string           // 'YYYY-MM-DD'
+  sleep_hours: number | null
+  stress_level: number | null
+  soreness_level: number | null
+  motivation_level: number | null
+}

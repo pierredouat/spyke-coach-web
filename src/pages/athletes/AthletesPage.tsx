@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Discipline } from '../../types/database'
@@ -13,6 +14,7 @@ type AthleteProfile = {
 
 type RelationRow = {
   id: string
+  athlete_id: string
   status: 'pending' | 'active' | 'inactive'
   invited_at: string
   accepted_at: string | null
@@ -39,6 +41,7 @@ function Avatar({ athlete, size = 'md' }: { athlete: AthleteProfile | null; size
 
 export default function AthletesPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [pending, setPending] = useState<RelationRow[]>([])
   const [active, setActive] = useState<RelationRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,6 +60,7 @@ export default function AthletesPage() {
       .from('coach_athlete_relationships')
       .select(`
         id,
+        athlete_id,
         status,
         invited_at,
         accepted_at,
@@ -236,9 +240,10 @@ export default function AthletesPage() {
               <span>Club</span>
             </div>
             {active.map((row, i) => (
-              <div
+              <button
                 key={row.id}
-                className={`grid grid-cols-[1fr_1fr_auto] items-center px-5 py-4 gap-4 ${i < active.length - 1 ? 'border-b border-gray-50' : ''}`}
+                onClick={() => navigate(`/athletes/${row.athlete_id}`)}
+                className={`w-full grid grid-cols-[1fr_1fr_auto] items-center px-5 py-4 gap-4 text-left hover:bg-gray-50 transition-colors ${i < active.length - 1 ? 'border-b border-gray-50' : ''}`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar athlete={row.athlete} size="sm" />
@@ -246,7 +251,7 @@ export default function AthletesPage() {
                 </div>
                 <span className="text-muted text-sm truncate">{formatDisciplines(row.athlete?.disciplines)}</span>
                 <span className="text-muted text-sm">{row.athlete?.club ?? '—'}</span>
-              </div>
+              </button>
             ))}
           </div>
         )}
