@@ -95,7 +95,7 @@ function weeksForScale(scale: Scale): number {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function PlanningPage() {
-  const { user } = useAuth()
+  const { user, team } = useAuth()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -121,11 +121,11 @@ export default function PlanningPage() {
 
   // ── Load athletes ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return
+    if (!user || !team) return
     supabase
       .from('coach_athlete_relationships')
       .select('athlete_id')
-      .eq('coach_id', user.id)
+      .eq('team_id', team.id)
       .eq('status', 'active')
       .then(async ({ data }) => {
         const ids = (data ?? []).map(r => r.athlete_id)
@@ -136,17 +136,27 @@ export default function PlanningPage() {
           .in('id', ids)
         setAthletes((profiles ?? []) as unknown as Profile[])
       })
-  }, [user])
+  }, [user, team])
 
   // ── Load sessions ────────────────────────────────────────────────────────
   const loadSessions = useCallback(async () => {
     if (!user) return
     setLoading(true)
+
+    const athleteIds = athletes.map(a => a.id)
+
+    // No athletes yet → empty sessions
+    if (athleteIds.length === 0) {
+      setSessions([])
+      setLoading(false)
+      return
+    }
+
     const { from, to } = rangeForScale(currentDate, scale)
     let query = supabase
       .from('sessions')
       .select('*, session_exercises(*)')
-      .eq('coach_id', user.id)
+      .in('athlete_id', athleteIds)
       .gte('scheduled_date', from)
       .lte('scheduled_date', to)
       .order('scheduled_date')
@@ -159,7 +169,7 @@ export default function PlanningPage() {
     const { data } = await query
     setSessions((data ?? []) as unknown as SessionWithExercises[])
     setLoading(false)
-  }, [user, currentDate, scale, filteredAthleteId])
+  }, [user, athletes, currentDate, scale, filteredAthleteId])
 
   useEffect(() => { loadSessions() }, [loadSessions])
 

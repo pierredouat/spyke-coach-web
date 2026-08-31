@@ -40,7 +40,7 @@ function Avatar({ athlete, size = 'md' }: { athlete: AthleteProfile | null; size
 }
 
 export default function AthletesPage() {
-  const { user } = useAuth()
+  const { user, team } = useAuth()
   const navigate = useNavigate()
   const [pending, setPending] = useState<RelationRow[]>([])
   const [active, setActive] = useState<RelationRow[]>([])
@@ -49,12 +49,12 @@ export default function AthletesPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !team) return
     fetchRelations()
-  }, [user])
+  }, [user, team])
 
   async function fetchRelations() {
-    if (!user) return
+    if (!team) return
     setLoading(true)
     const { data, error } = await supabase
       .from('coach_athlete_relationships')
@@ -71,7 +71,7 @@ export default function AthletesPage() {
           club
         )
       `)
-      .eq('coach_id', user.id)
+      .eq('team_id', team.id)
       .in('status', ['pending', 'active'])
       .order('invited_at', { ascending: false })
 

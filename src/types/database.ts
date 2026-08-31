@@ -1,6 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
 export type UserRole = 'athlete' | 'coach'
+export type StaffRole = 'head_coach' | 'assistant_coach' | 'strength_coach' | 'trainer'
 export type Discipline = 'sprint' | 'demi_fond' | 'fond' | 'sauts' | 'lancers' | 'combines' | 'marche'
 export type RelationshipStatus = 'pending' | 'active' | 'inactive'
 export type SleepHoursEnum = 'less_6' | '6_to_8' | 'more_8'
@@ -10,6 +11,13 @@ export type ExerciseDisciplineGroup = 'sprint' | 'sauts' | 'lancers' | 'demi_fon
 export type MuscuCycle = 'force' | 'puissance' | 'vitesse' | 'hypertrophie'
 export type ExerciseUnit = 'kg' | 's' | 'm' | 'reps' | 'points'
 export type SessionStatus = 'a_faire' | 'en_cours' | 'termine' | 'modifie'
+
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  head_coach:       'Coach Principal',
+  assistant_coach:  'Coach Adjoint',
+  strength_coach:   'Préparateur Physique',
+  trainer:          'Soigneur / Kiné',
+}
 
 export type Database = {
   public: {
@@ -67,6 +75,7 @@ export type Database = {
           id: string
           coach_id: string
           athlete_id: string
+          team_id: string | null
           status: RelationshipStatus
           invited_at: string
           accepted_at: string | null
@@ -75,6 +84,7 @@ export type Database = {
           id?: string
           coach_id: string
           athlete_id: string
+          team_id?: string | null
           status?: RelationshipStatus
           invited_at?: string
           accepted_at?: string | null
@@ -83,9 +93,94 @@ export type Database = {
           id?: string
           coach_id?: string
           athlete_id?: string
+          team_id?: string | null
           status?: RelationshipStatus
           invited_at?: string
           accepted_at?: string | null
+        }
+        Relationships: []
+      }
+      teams: {
+        Row: {
+          id: string
+          name: string
+          university_name: string | null
+          logo_url: string | null
+          primary_color: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          university_name?: string | null
+          logo_url?: string | null
+          primary_color?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          university_name?: string | null
+          logo_url?: string | null
+          primary_color?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      team_members: {
+        Row: {
+          team_id: string
+          user_id: string
+          role: StaffRole
+          created_at: string
+        }
+        Insert: {
+          team_id: string
+          user_id: string
+          role?: StaffRole
+          created_at?: string
+        }
+        Update: {
+          team_id?: string
+          user_id?: string
+          role?: StaffRole
+          created_at?: string
+        }
+        Relationships: []
+      }
+      team_invitations: {
+        Row: {
+          id: string
+          team_id: string
+          role: StaffRole
+          code: string
+          created_by: string
+          used_by: string | null
+          used_at: string | null
+          expires_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          role?: StaffRole
+          code: string
+          created_by: string
+          used_by?: string | null
+          used_at?: string | null
+          expires_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          role?: StaffRole
+          code?: string
+          created_by?: string
+          used_by?: string | null
+          used_at?: string | null
+          expires_at?: string
+          created_at?: string
         }
         Relationships: []
       }
@@ -246,7 +341,18 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      get_my_team_ids: {
+        Args: Record<never, never>
+        Returns: string[]
+      }
+      join_team_with_code: {
+        Args: { p_code: string }
+        Returns: Json
+      }
+      validate_team_invite_code: {
+        Args: { p_code: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
@@ -297,6 +403,9 @@ export type SessionWithExercises = Session & { session_exercises: SessionExercis
 export type Profile = Database['public']['Tables']['profiles']['Row']
 export type CoachAthleteRelationship = Database['public']['Tables']['coach_athlete_relationships']['Row']
 export type Exercise = Database['public']['Tables']['exercises']['Row']
+export type Team = Database['public']['Tables']['teams']['Row']
+export type TeamMember = Database['public']['Tables']['team_members']['Row']
+export type TeamInvitation = Database['public']['Tables']['team_invitations']['Row']
 
 // View: journal_entries_coach_summary — only whitelisted fields, never raw journal_entries
 export type JournalCoachSummary = Database['public']['Views']['journal_entries_coach_summary']['Row']

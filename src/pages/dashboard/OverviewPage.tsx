@@ -54,22 +54,23 @@ function FatigueBadge({ signal }: { signal: FatigueSignal }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function OverviewPage() {
-  const { user } = useAuth()
+  const { user, team } = useAuth()
   const navigate = useNavigate()
   const [athletes, setAthletes] = useState<Profile[]>([])
   const [signals, setSignals]   = useState<Record<string, FatigueSignal>>({})
   const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !team) return
     load()
-  }, [user])
+  }, [user, team])
 
   async function load() {
+    if (!team) return
     const { data: relationships } = await supabase
       .from('coach_athlete_relationships')
       .select('athlete_id')
-      .eq('coach_id', user!.id)
+      .eq('team_id', team.id)
       .eq('status', 'active')
 
     if (!relationships?.length) { setLoading(false); return }
