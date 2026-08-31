@@ -54,16 +54,17 @@ function FatigueBadge({ signal }: { signal: FatigueSignal }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function OverviewPage() {
-  const { user, team } = useAuth()
+  const { user, team, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [athletes, setAthletes] = useState<Profile[]>([])
   const [signals, setSignals]   = useState<Record<string, FatigueSignal>>({})
   const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
-    if (!user || !team) return
+    if (authLoading || !user) return
+    if (!team) { setLoading(false); return }
     load()
-  }, [user, team])
+  }, [authLoading, user, team])
 
   async function load() {
     if (!team) return

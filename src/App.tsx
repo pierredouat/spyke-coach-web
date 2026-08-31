@@ -13,9 +13,10 @@ import AthleteDetailPage from './pages/athletes/AthleteDetailPage'
 import TeamPage from './pages/team/TeamPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth()
+  const { session, profile, loading } = useAuth()
   if (loading) return null
   if (!session) return <Navigate to="/login" replace />
+  if (!profile?.onboarding_completed) return <Navigate to="/onboarding" replace />
   return <>{children}</>
 }
 

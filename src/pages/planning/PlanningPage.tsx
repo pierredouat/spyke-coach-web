@@ -95,7 +95,7 @@ function weeksForScale(scale: Scale): number {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function PlanningPage() {
-  const { user, team } = useAuth()
+  const { user, team, loading: authLoading } = useAuth()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -121,7 +121,8 @@ export default function PlanningPage() {
 
   // ── Load athletes ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user || !team) return
+    if (authLoading || !user) return
+    if (!team) { setAthletes([]); return }
     supabase
       .from('coach_athlete_relationships')
       .select('athlete_id')
@@ -136,7 +137,7 @@ export default function PlanningPage() {
           .in('id', ids)
         setAthletes((profiles ?? []) as unknown as Profile[])
       })
-  }, [user, team])
+  }, [authLoading, user, team])
 
   // ── Load sessions ────────────────────────────────────────────────────────
   const loadSessions = useCallback(async () => {

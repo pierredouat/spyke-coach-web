@@ -40,7 +40,7 @@ function Avatar({ athlete, size = 'md' }: { athlete: AthleteProfile | null; size
 }
 
 export default function AthletesPage() {
-  const { user, team } = useAuth()
+  const { user, team, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [pending, setPending] = useState<RelationRow[]>([])
   const [active, setActive] = useState<RelationRow[]>([])
@@ -49,9 +49,10 @@ export default function AthletesPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!user || !team) return
+    if (authLoading || !user) return
+    if (!team) { setLoading(false); return }
     fetchRelations()
-  }, [user, team])
+  }, [authLoading, user, team])
 
   async function fetchRelations() {
     if (!team) return
