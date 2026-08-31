@@ -389,3 +389,27 @@ CREATE POLICY "team_session_exercises_delete" ON session_exercises
       )
     )
   );
+
+-- ── 13. RLS profiles : accès équipe ──────────────────────────────────────────
+-- La policy mobile "profiles: lecture — soi + relations actives" ne couvre pas :
+--   • La lecture des profils du staff par d'autres membres du staff
+--   • La lecture des profils des athlètes par les assistants (coach_id ≠ auth.uid())
+--   • Les athlètes en status 'pending' (is_coach_of exige status = 'active')
+
+CREATE POLICY "team_staff_profiles_select" ON profiles
+  FOR SELECT USING (
+    id IN (
+      SELECT tm.user_id
+      FROM   team_members tm
+      WHERE  tm.team_id = ANY(get_my_team_ids())
+    )
+  );
+
+CREATE POLICY "team_athlete_profiles_select" ON profiles
+  FOR SELECT USING (
+    id IN (
+      SELECT car.athlete_id
+      FROM   coach_athlete_relationships car
+      WHERE  car.team_id = ANY(get_my_team_ids())
+    )
+  );
