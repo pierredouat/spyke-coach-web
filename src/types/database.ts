@@ -11,6 +11,17 @@ export type ExerciseDisciplineGroup = 'sprint' | 'sauts' | 'lancers' | 'demi_fon
 export type MuscuCycle = 'force' | 'puissance' | 'vitesse' | 'hypertrophie'
 export type ExerciseUnit = 'kg' | 's' | 'm' | 'reps' | 'points'
 export type SessionStatus = 'a_faire' | 'en_cours' | 'termine' | 'modifie'
+export type AthleticEvent =
+  | '60m' | '100m' | '200m' | '400m'
+  | '60m_haies' | '100m_haies' | '110m_haies' | '400m_haies'
+  | '4x100m' | '4x400m'
+  | '800m' | '1500m' | 'mile' | '3000m' | '3000m_steeple'
+  | '5000m' | '10000m' | 'semi_marathon' | 'marathon' | 'cross'
+  | 'longueur' | 'triple_saut' | 'hauteur' | 'perche'
+  | 'poids' | 'disque' | 'javelot' | 'marteau'
+  | 'decathlon' | 'heptathlon' | 'pentathlon'
+  | 'marche_10km' | 'marche_20km' | 'marche_35km' | 'marche_50km'
+export type MarkUnit = 'seconds' | 'meters' | 'points'
 
 export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   head_coach:       'Coach Principal',
@@ -181,6 +192,87 @@ export type Database = {
           used_at?: string | null
           expires_at?: string
           created_at?: string
+        }
+        Relationships: []
+      }
+      performances: {
+        Row: {
+          id: string
+          athlete_id: string
+          event: AthleticEvent
+          mark: string
+          mark_value: number
+          unit: MarkUnit
+          is_pb: boolean
+          date: string
+          location: string | null
+          notes: string | null
+          video_url: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          athlete_id: string
+          event: AthleticEvent
+          mark: string
+          mark_value: number
+          unit: MarkUnit
+          is_pb?: boolean
+          date: string
+          location?: string | null
+          notes?: string | null
+          video_url?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          athlete_id?: string
+          event?: AthleticEvent
+          mark?: string
+          mark_value?: number
+          unit?: MarkUnit
+          is_pb?: boolean
+          date?: string
+          location?: string | null
+          notes?: string | null
+          video_url?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      exercise_results: {
+        Row: {
+          id: string
+          session_exercise_id: string
+          exercise_id: string | null
+          athlete_id: string
+          actual_value: string
+          actual_value_numeric: number | null
+          unit: string | null
+          notes: string | null
+          recorded_at: string
+        }
+        Insert: {
+          id?: string
+          session_exercise_id: string
+          exercise_id?: string | null
+          athlete_id: string
+          actual_value: string
+          actual_value_numeric?: number | null
+          unit?: string | null
+          notes?: string | null
+          recorded_at?: string
+        }
+        Update: {
+          id?: string
+          session_exercise_id?: string
+          exercise_id?: string | null
+          athlete_id?: string
+          actual_value?: string
+          actual_value_numeric?: number | null
+          unit?: string | null
+          notes?: string | null
+          recorded_at?: string
         }
         Relationships: []
       }
@@ -406,6 +498,8 @@ export type Exercise = Database['public']['Tables']['exercises']['Row']
 export type Team = Database['public']['Tables']['teams']['Row']
 export type TeamMember = Database['public']['Tables']['team_members']['Row']
 export type TeamInvitation = Database['public']['Tables']['team_invitations']['Row']
+export type Performance = Database['public']['Tables']['performances']['Row']
+export type ExerciseResult = Database['public']['Tables']['exercise_results']['Row']
 
 // View: journal_entries_coach_summary — only whitelisted fields, never raw journal_entries
 export type JournalCoachSummary = Database['public']['Views']['journal_entries_coach_summary']['Row']
