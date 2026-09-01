@@ -19,7 +19,7 @@ CREATE POLICY "team_staff_profiles_select" ON profiles
     id IN (
       SELECT tm.user_id
       FROM   team_members tm
-      WHERE  tm.team_id = ANY(get_my_team_ids())
+      WHERE  tm.team_id IN (SELECT get_my_team_ids())
     )
   );
 
@@ -30,6 +30,6 @@ CREATE POLICY "team_athlete_profiles_select" ON profiles
     id IN (
       SELECT car.athlete_id
       FROM   coach_athlete_relationships car
-      WHERE  car.team_id = ANY(get_my_team_ids())
+      WHERE  car.team_id IN (SELECT get_my_team_ids())
     )
   );

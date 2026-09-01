@@ -13,7 +13,7 @@ CREATE POLICY "team_performances_select" ON performances
     athlete_id IN (
       SELECT car.athlete_id
       FROM   coach_athlete_relationships car
-      WHERE  car.team_id = ANY(get_my_team_ids())
+      WHERE  car.team_id IN (SELECT get_my_team_ids())
     )
   );
 
@@ -23,7 +23,7 @@ CREATE POLICY "team_exercise_results_select" ON exercise_results
     athlete_id IN (
       SELECT car.athlete_id
       FROM   coach_athlete_relationships car
-      WHERE  car.team_id = ANY(get_my_team_ids())
+      WHERE  car.team_id IN (SELECT get_my_team_ids())
     )
   );
 
@@ -34,6 +34,6 @@ CREATE POLICY "team_exercises_select" ON exercises
     coach_id IN (
       SELECT tm.user_id
       FROM   team_members tm
-      WHERE  tm.team_id = ANY(get_my_team_ids())
+      WHERE  tm.team_id IN (SELECT get_my_team_ids())
     )
   );

@@ -51,12 +51,16 @@ ALTER TABLE coach_athlete_relationships
   ADD COLUMN team_id uuid REFERENCES teams(id);
 
 -- ── 6. Fonction helper SECURITY DEFINER (évite la récursion RLS) ──────────────
+-- RETURNS SETOF uuid : les policies utilisent IN (SELECT get_my_team_ids()).
+-- SECURITY DEFINER obligatoire : sans lui, lire team_members dans la policy
+-- team_members_select déclencherait une récursion infinie.
 CREATE OR REPLACE FUNCTION get_my_team_ids()
-RETURNS uuid[] AS $$
-  SELECT COALESCE(ARRAY(
-    SELECT team_id FROM team_members WHERE user_id = auth.uid()
-  ), '{}')
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+RETURNS SETOF uuid
+LANGUAGE sql SECURITY DEFINER STABLE
+SET search_path TO 'public'
+AS $$
+  SELECT team_id FROM team_members WHERE user_id = auth.uid()
+$$;
 
 -- ── 7. Migration des données existantes ───────────────────────────────────────
 DO $$
@@ -244,7 +248,7 @@ ALTER TABLE team_invitations ENABLE ROW LEVEL SECURITY;
 
 -- teams : lecture par membres, modification par head_coach
 CREATE POLICY "team_select" ON teams
-  FOR SELECT USING (id = ANY(get_my_team_ids()));
+  FOR SELECT USING (id IN (SELECT get_my_team_ids()));
 
 CREATE POLICY "team_update" ON teams
   FOR UPDATE USING (
@@ -258,7 +262,7 @@ CREATE POLICY "team_update" ON teams
 
 -- team_members : lecture par membres de la même équipe
 CREATE POLICY "team_members_select" ON team_members
-  FOR SELECT USING (team_id = ANY(get_my_team_ids()));
+  FOR SELECT USING (team_id IN (SELECT get_my_team_ids()));
 
 -- team_members : ajout par head_coach uniquement
 CREATE POLICY "team_members_insert" ON team_members
@@ -285,7 +289,7 @@ CREATE POLICY "team_members_delete" ON team_members
 
 -- team_invitations : lecture par membres de l'équipe
 CREATE POLICY "team_inv_select" ON team_invitations
-  FOR SELECT USING (team_id = ANY(get_my_team_ids()));
+  FOR SELECT USING (team_id IN (SELECT get_my_team_ids()));
 
 -- team_invitations : création par head_coach
 CREATE POLICY "team_inv_insert" ON team_invitations
@@ -301,7 +305,7 @@ CREATE POLICY "team_inv_insert" ON team_invitations
 -- coach_athlete_relationships : tout membre staff peut lire son roster
 CREATE POLICY "team_car_select" ON coach_athlete_relationships
   FOR SELECT USING (
-    team_id IS NOT NULL AND team_id = ANY(get_my_team_ids())
+    team_id IS NOT NULL AND team_id IN (SELECT get_my_team_ids())
   );
 
 -- sessions : tout membre staff peut lire les séances des athlètes de l'équipe
@@ -310,7 +314,7 @@ CREATE POLICY "team_sessions_select" ON sessions
     athlete_id IN (
       SELECT car.athlete_id
       FROM   coach_athlete_relationships car
-      WHERE  car.team_id = ANY(get_my_team_ids())
+      WHERE  car.team_id IN (SELECT get_my_team_ids())
         AND  car.status  = 'active'
     )
   );
@@ -321,7 +325,7 @@ CREATE POLICY "team_sessions_insert" ON sessions
     athlete_id IN (
       SELECT car.athlete_id
       FROM   coach_athlete_relationships car
-      WHERE  car.team_id = ANY(get_my_team_ids())
+      WHERE  car.team_id IN (SELECT get_my_team_ids())
         AND  car.status  = 'active'
     )
   );
@@ -332,7 +336,7 @@ CREATE POLICY "team_sessions_update" ON sessions
     athlete_id IN (
       SELECT car.athlete_id
       FROM   coach_athlete_relationships car
-      WHERE  car.team_id = ANY(get_my_team_ids())
+      WHERE  car.team_id IN (SELECT get_my_team_ids())
         AND  car.status  = 'active'
     )
   );
@@ -345,7 +349,7 @@ CREATE POLICY "team_session_exercises_select" ON session_exercises
       WHERE  s.athlete_id IN (
         SELECT car.athlete_id
         FROM   coach_athlete_relationships car
-        WHERE  car.team_id = ANY(get_my_team_ids())
+        WHERE  car.team_id IN (SELECT get_my_team_ids())
           AND  car.status  = 'active'
       )
     )
@@ -358,7 +362,7 @@ CREATE POLICY "team_session_exercises_insert" ON session_exercises
       WHERE  s.athlete_id IN (
         SELECT car.athlete_id
         FROM   coach_athlete_relationships car
-        WHERE  car.team_id = ANY(get_my_team_ids())
+        WHERE  car.team_id IN (SELECT get_my_team_ids())
           AND  car.status  = 'active'
       )
     )
@@ -371,7 +375,7 @@ CREATE POLICY "team_session_exercises_update" ON session_exercises
       WHERE  s.athlete_id IN (
         SELECT car.athlete_id
         FROM   coach_athlete_relationships car
-        WHERE  car.team_id = ANY(get_my_team_ids())
+        WHERE  car.team_id IN (SELECT get_my_team_ids())
           AND  car.status  = 'active'
       )
     )
@@ -384,7 +388,7 @@ CREATE POLICY "team_session_exercises_delete" ON session_exercises
       WHERE  s.athlete_id IN (
         SELECT car.athlete_id
         FROM   coach_athlete_relationships car
-        WHERE  car.team_id = ANY(get_my_team_ids())
+        WHERE  car.team_id IN (SELECT get_my_team_ids())
           AND  car.status  = 'active'
       )
     )
@@ -401,7 +405,7 @@ CREATE POLICY "team_staff_profiles_select" ON profiles
     id IN (
       SELECT tm.user_id
       FROM   team_members tm
-      WHERE  tm.team_id = ANY(get_my_team_ids())
+      WHERE  tm.team_id IN (SELECT get_my_team_ids())
     )
   );
 
@@ -410,6 +414,6 @@ CREATE POLICY "team_athlete_profiles_select" ON profiles
     id IN (
       SELECT car.athlete_id
       FROM   coach_athlete_relationships car
-      WHERE  car.team_id = ANY(get_my_team_ids())
+      WHERE  car.team_id IN (SELECT get_my_team_ids())
     )
   );
