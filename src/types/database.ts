@@ -274,7 +274,15 @@ export type Database = {
           notes?: string | null
           recorded_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "exercise_results_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       exercises: {
         Row: {
