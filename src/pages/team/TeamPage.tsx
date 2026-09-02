@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { StaffRole, TeamInvitation, BodyZone } from '../../types/database'
@@ -6,6 +7,7 @@ import { STAFF_ROLE_LABELS, BODY_ZONE_LABELS } from '../../types/database'
 
 type TeamInjuryRow = {
   id: string
+  athlete_id: string
   body_zone: BodyZone
   side: string | null
   severity: number
@@ -227,6 +229,7 @@ function TeamSettingsSection({
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TeamPage() {
   const { user, team, teamRole, refreshTeam } = useAuth()
+  const navigate = useNavigate()
   const [members, setMembers] = useState<StaffMember[]>([])
   const [invitations, setInvitations] = useState<TeamInvitation[]>([])
   const [injuries, setInjuries] = useState<TeamInjuryRow[]>([])
@@ -268,7 +271,7 @@ export default function TeamPage() {
       supabase
         .from('injuries')
         .select(`
-          id, body_zone, side, severity, created_at,
+          id, athlete_id, body_zone, side, severity, created_at,
           profiles!injuries_athlete_id_fkey(first_name, last_name)
         `)
         .eq('status', 'active')
@@ -492,9 +495,10 @@ export default function TeamPage() {
               const athleteName = [inj.profiles?.first_name, inj.profiles?.last_name]
                 .filter(Boolean).join(' ') || '—'
               return (
-                <div
+                <button
                   key={inj.id}
-                  className={`flex items-center gap-4 px-5 py-4 ${i < injuries.length - 1 ? 'border-b border-gray-50' : ''}`}
+                  onClick={() => navigate(`/athletes/${inj.athlete_id}`)}
+                  className={`w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors ${i < injuries.length - 1 ? 'border-b border-gray-50' : ''}`}
                 >
                   <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
                     <span className="text-accent text-xs font-semibold">
@@ -514,7 +518,10 @@ export default function TeamPage() {
                       {' · '}depuis {daysSince(inj.created_at)} jour{daysSince(inj.created_at) > 1 ? 's' : ''}
                     </p>
                   </div>
-                </div>
+                  <svg className="w-4 h-4 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               )
             })}
           </div>

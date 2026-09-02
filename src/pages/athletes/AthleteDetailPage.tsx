@@ -463,14 +463,17 @@ export default function AthleteDetailPage() {
     if (authLoading || !user || !team || !athleteId) return
 
     async function load() {
-      const { data: rel } = await supabase
+      // Use .limit(1) instead of .maybeSingle() — multiple CAR rows can exist
+      // for the same (team_id, athlete_id) when there are multiple coaches.
+      // maybeSingle() errors on >1 row, causing false "Accès non autorisé".
+      const { data: rels } = await supabase
         .from('coach_athlete_relationships')
         .select('id')
         .eq('team_id', team!.id)
         .eq('athlete_id', athleteId!)
-        .maybeSingle()
+        .limit(1)
 
-      if (!rel) { setAllowed(false); setLoading(false); return }
+      if (!rels?.length) { setAllowed(false); setLoading(false); return }
 
       const [profileRes, perfRes, exRes, injRes] = await Promise.all([
         supabase
