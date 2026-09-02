@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -31,9 +31,8 @@ type ApptRow = {
   injuries: { body_zone: BodyZone; side: string | null; severity: number } | null
 }
 
-// Pending drag/resize confirmation (optimistic UI: event already moved visually)
 type PendingAction = {
-  eventId: string
+  slotId: string
   type: 'move' | 'resize'
   message: string
   originalStart: string
@@ -41,6 +40,13 @@ type PendingAction = {
   newStart: string
   newEnd: string
 }
+
+type DeleteTarget = {
+  ids: string[]
+  count: number
+}
+
+type SlotDuration = 15 | 30 | 45 | 60
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDateTime(iso: string) {
@@ -72,35 +78,92 @@ const STATUS_CLASSES: Record<AppointmentStatus, string> = {
   cancelled: 'text-muted bg-gray-100 border-gray-200',
 }
 
-function slotToEvent(slot: SlotRow): EventInput {
-  return {
-    id: slot.id,
-    start: slot.start_time,
-    end: slot.end_time,
-    title: slot.is_booked ? 'Réservé' : 'Disponible',
-    backgroundColor: slot.is_booked ? '#D97706' : '#3743BA',
-    borderColor: slot.is_booked ? '#B45309' : '#2d389e',
-    textColor: '#ffffff',
-    editable: !slot.is_booked,
-    classNames: slot.is_booked ? ['fc-event-booked'] : [],
-    extendedProps: { isBooked: slot.is_booked },
+// ─── Merge contiguous free slots for display ──────────────────────────────────
+// Contiguous free slots are shown as a single visual block on the calendar.
+// Booked slots always display individually. Single free slots are draggable/resizable;
+// merged blocks are not (can't meaningfully drag 40 slots at once).
+function mergeContiguousSlots(slots: SlotRow[]): EventInput[] {
+  const free = [...slots.filter(s => !s.is_booked)]
+    .sort((a, b) => a.start_time.localeCompare(b.start_time))
+  const booked = slots.filter(s => s.is_booked)
+
+  const result: EventInput[] = []
+
+  let i = 0
+  while (i < free.length) {
+    const groupStart = free[i].start_time
+    const groupIds: string[] = [free[i].id]
+    let groupEnd = free[i].end_time
+
+    while (
+      i + 1 < free.length &&
+      new Date(free[i].end_time).getTime() === new Date(free[i + 1].start_time).getTime()
+    ) {
+      i++
+      groupEnd = free[i].end_time
+      groupIds.push(free[i].id)
+    }
+
+    const single = groupIds.length === 1
+    result.push({
+      id: single ? groupIds[0] : `block-${groupIds[0]}`,
+      start: groupStart,
+      end: groupEnd,
+      title: single ? 'Disponible' : `${groupIds.length} créneaux`,
+      backgroundColor: '#3743BA',
+      borderColor: '#2d389e',
+      textColor: '#ffffff',
+      editable: single,
+      extendedProps: {
+        isBooked: false,
+        isMerged: !single,
+        mergedIds: groupIds,
+        slotId: single ? groupIds[0] : null,
+      },
+    })
+    i++
   }
+
+  for (const slot of booked) {
+    result.push({
+      id: slot.id,
+      start: slot.start_time,
+      end: slot.end_time,
+      title: 'Réservé',
+      backgroundColor: '#D97706',
+      borderColor: '#B45309',
+      textColor: '#ffffff',
+      editable: false,
+      classNames: ['fc-event-booked'],
+      extendedProps: { isBooked: true, isMerged: false, mergedIds: [slot.id], slotId: slot.id },
+    })
+  }
+
+  return result
 }
 
 // ─── Delete confirmation modal ────────────────────────────────────────────────
 function DeleteModal({
+  count,
   onConfirm,
   onCancel,
 }: {
+  count: number
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const single = count === 1
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-ink text-base font-semibold mb-2">Supprimer ce créneau ?</h2>
+        <h2 className="text-ink text-base font-semibold mb-2">
+          {single ? 'Supprimer ce créneau ?' : `Supprimer ces ${count} créneaux ?`}
+        </h2>
         <p className="text-muted text-sm mb-5">
-          Ce créneau sera supprimé définitivement. Cette action est irréversible.
+          {single
+            ? 'Ce créneau sera supprimé définitivement.'
+            : `Ces ${count} créneaux contigus seront supprimés définitivement.`}{' '}
+          Cette action est irréversible.
         </p>
         <div className="flex gap-2">
           <button
@@ -135,7 +198,8 @@ function BookedModal({ onClose }: { onClose: () => void }) {
           <h2 className="text-ink text-base font-semibold">Créneau réservé</h2>
         </div>
         <p className="text-muted text-sm mb-5">
-          Ce créneau est déjà réservé par un athlète. Pour le modifier, annulez d&apos;abord le rendez-vous associé depuis la section ci-dessous.
+          Ce créneau est déjà réservé par un athlète. Pour le modifier, annulez d&apos;abord le
+          rendez-vous associé depuis la section ci-dessous.
         </p>
         <button
           onClick={onClose}
@@ -161,18 +225,25 @@ function Spinner() {
   )
 }
 
+const DURATION_OPTIONS: SlotDuration[] = [15, 30, 45, 60]
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TrainerPage() {
   const { user, team } = useAuth()
   const calendarRef = useRef<FullCalendar>(null)
 
-  const [events, setEvents] = useState<EventInput[]>([])
+  // Raw DB rows — source of truth for calendar state
+  const [slots, setSlots] = useState<SlotRow[]>([])
+  const [slotDuration, setSlotDuration] = useState<SlotDuration>(15)
   const [loading, setLoading] = useState(true)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [showBookedModal, setShowBookedModal] = useState(false)
   const [appointments, setAppointments] = useState<ApptRow[]>([])
   const [apptLoading, setApptLoading] = useState(true)
+
+  // Contiguous free slots are merged into a single visual block for readability
+  const displayEvents = useMemo(() => mergeContiguousSlots(slots), [slots])
 
   // ── Load initial data ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -185,19 +256,14 @@ export default function TrainerPage() {
     if (!user) return
     setLoading(true)
 
-    // Load slots from start of current week onwards (no upper bound)
-    const startOfWeek = new Date()
-    startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7))
-    startOfWeek.setHours(0, 0, 0, 0)
-
     const { data } = await supabase
       .from('trainer_availability')
       .select('id, start_time, end_time, is_booked')
       .eq('trainer_id', user.id)
-      .gte('start_time', startOfWeek.toISOString())
+      .gte('start_time', new Date().toISOString())
       .order('start_time')
 
-    setEvents((data ?? []).map(slotToEvent))
+    setSlots((data ?? []) as SlotRow[])
     setLoading(false)
   }
 
@@ -231,91 +297,106 @@ export default function TrainerPage() {
 
   // ── Calendar event handlers ─────────────────────────────────────────────────
 
-  // Click-drag on empty cell → create new slot
+  // Drag on empty range → split into N slots of `slotDuration` minutes and bulk-insert
   async function handleSelect(info: DateSelectArg) {
     if (!user || !team) return
+
     const { start, end } = info
+    const slotMs = slotDuration * 60 * 1000
+    const count = Math.floor((end.getTime() - start.getTime()) / slotMs)
+
+    calendarRef.current?.getApi().unselect()
+
+    if (count === 0) return
+
+    const inserts = Array.from({ length: count }, (_, i) => ({
+      trainer_id: user.id,
+      team_id: team.id,
+      start_time: new Date(start.getTime() + i * slotMs).toISOString(),
+      end_time: new Date(start.getTime() + (i + 1) * slotMs).toISOString(),
+    }))
 
     const { data, error } = await supabase
       .from('trainer_availability')
-      .insert({
-        trainer_id: user.id,
-        team_id: team.id,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-      })
+      .insert(inserts)
       .select('id, start_time, end_time, is_booked')
-      .single()
 
     if (!error && data) {
-      setEvents(prev => [...prev, slotToEvent(data as SlotRow)])
+      setSlots(prev => [...prev, ...(data as SlotRow[])])
     }
-
-    calendarRef.current?.getApi().unselect()
   }
 
-  // Click on existing event → delete (if free) or info (if booked)
+  // Click on event → delete free slots or show booked info
   function handleEventClick(info: EventClickArg) {
-    if (info.event.extendedProps.isBooked) {
+    const { isBooked, mergedIds } = info.event.extendedProps as {
+      isBooked: boolean
+      mergedIds: string[]
+    }
+
+    if (isBooked) {
       setShowBookedModal(true)
       return
     }
-    setDeleteTargetId(info.event.id)
+    setDeleteTarget({ ids: mergedIds, count: mergedIds.length })
   }
 
-  // Drag to move → show confirmation bar (optimistic UI: state updated immediately)
+  // Drag single free slot → optimistic state update + confirmation bar
   function handleEventDrop(info: EventDropArg) {
-    if (info.event.extendedProps.isBooked) {
+    const { isBooked, isMerged, slotId } = info.event.extendedProps as {
+      isBooked: boolean; isMerged: boolean; slotId: string | null
+    }
+
+    if (isBooked || isMerged || !slotId) {
       info.revert()
       return
     }
 
     const originalStart = info.oldEvent.start!.toISOString()
-    const originalEnd = info.oldEvent.end!.toISOString()
-    const newStart = info.event.start!.toISOString()
-    const newEnd = info.event.end!.toISOString()
+    const originalEnd   = info.oldEvent.end!.toISOString()
+    const newStart      = info.event.start!.toISOString()
+    const newEnd        = info.event.end!.toISOString()
 
-    // Update state to match what FullCalendar already shows (optimistic)
-    setEvents(prev => prev.map(e =>
-      e.id === info.event.id ? { ...e, start: newStart, end: newEnd } : e
+    setSlots(prev => prev.map(s =>
+      s.id === slotId ? { ...s, start_time: newStart, end_time: newEnd } : s
     ))
 
     setPendingAction({
-      eventId: info.event.id,
-      type: 'move',
+      slotId, type: 'move',
       message: `Déplacer ce créneau vers ${fmtDateTime(newStart)} ?`,
       originalStart, originalEnd, newStart, newEnd,
     })
   }
 
-  // Resize → show confirmation bar (optimistic UI)
+  // Resize single free slot → optimistic state update + confirmation bar
   function handleEventResize(info: EventResizeDoneArg) {
-    if (info.event.extendedProps.isBooked) {
+    const { isBooked, isMerged, slotId } = info.event.extendedProps as {
+      isBooked: boolean; isMerged: boolean; slotId: string | null
+    }
+
+    if (isBooked || isMerged || !slotId) {
       info.revert()
       return
     }
 
     const originalStart = info.oldEvent.start!.toISOString()
-    const originalEnd = info.oldEvent.end!.toISOString()
-    const newStart = info.event.start!.toISOString()
-    const newEnd = info.event.end!.toISOString()
+    const originalEnd   = info.oldEvent.end!.toISOString()
+    const newStart      = info.event.start!.toISOString()
+    const newEnd        = info.event.end!.toISOString()
 
-    setEvents(prev => prev.map(e =>
-      e.id === info.event.id ? { ...e, start: newStart, end: newEnd } : e
+    setSlots(prev => prev.map(s =>
+      s.id === slotId ? { ...s, start_time: newStart, end_time: newEnd } : s
     ))
 
     setPendingAction({
-      eventId: info.event.id,
-      type: 'resize',
+      slotId, type: 'resize',
       message: `Modifier la durée du créneau (fin : ${fmtTime(newEnd)}) ?`,
       originalStart, originalEnd, newStart, newEnd,
     })
   }
 
-  // Confirm pending drag/resize → save to DB
   async function confirmPending() {
     if (!pendingAction) return
-    const { eventId, type, newStart, newEnd } = pendingAction
+    const { slotId, type, newStart, newEnd } = pendingAction
 
     const patch: { end_time: string; start_time?: string } = { end_time: newEnd }
     if (type === 'move') patch.start_time = newStart
@@ -323,47 +404,45 @@ export default function TrainerPage() {
     const { error } = await supabase
       .from('trainer_availability')
       .update(patch)
-      .eq('id', eventId)
+      .eq('id', slotId)
 
     if (error) {
-      // Revert state to original positions
-      setEvents(prev => prev.map(e =>
-        e.id === eventId
-          ? { ...e, start: pendingAction.originalStart, end: pendingAction.originalEnd }
-          : e
+      setSlots(prev => prev.map(s =>
+        s.id === slotId
+          ? { ...s, start_time: pendingAction.originalStart, end_time: pendingAction.originalEnd }
+          : s
       ))
     }
     setPendingAction(null)
   }
 
-  // Cancel pending → revert state to original positions
   function cancelPending() {
     if (!pendingAction) return
-    setEvents(prev => prev.map(e =>
-      e.id === pendingAction.eventId
-        ? { ...e, start: pendingAction.originalStart, end: pendingAction.originalEnd }
-        : e
+    setSlots(prev => prev.map(s =>
+      s.id === pendingAction.slotId
+        ? { ...s, start_time: pendingAction.originalStart, end_time: pendingAction.originalEnd }
+        : s
     ))
     setPendingAction(null)
   }
 
-  // Confirm delete
   async function confirmDelete() {
-    if (!deleteTargetId) return
+    if (!deleteTarget) return
+    const { ids } = deleteTarget
 
     const { error } = await supabase
       .from('trainer_availability')
       .delete()
-      .eq('id', deleteTargetId)
+      .in('id', ids)
 
     if (!error) {
-      setEvents(prev => prev.filter(e => e.id !== deleteTargetId))
-      setAppointments(prev => prev.filter(a => a.trainer_availability_id !== deleteTargetId))
+      const idSet = new Set(ids)
+      setSlots(prev => prev.filter(s => !idSet.has(s.id)))
+      setAppointments(prev => prev.filter(a => !idSet.has(a.trainer_availability_id)))
     }
-    setDeleteTargetId(null)
+    setDeleteTarget(null)
   }
 
-  // Confirm/cancel appointment
   async function updateAppointment(apptId: string, status: 'confirmed' | 'cancelled') {
     const { error } = await supabase
       .from('appointments')
@@ -378,11 +457,8 @@ export default function TrainerPage() {
             .from('trainer_availability')
             .update({ is_booked: false })
             .eq('id', appt.trainer_availability_id)
-          // Refresh calendar to show slot as free again
-          setEvents(prev => prev.map(e =>
-            e.id === appt.trainer_availability_id
-              ? { ...e, title: 'Disponible', backgroundColor: '#3743BA', borderColor: '#2d389e', editable: true, classNames: [], extendedProps: { isBooked: false } }
-              : e
+          setSlots(prev => prev.map(s =>
+            s.id === appt.trainer_availability_id ? { ...s, is_booked: false } : s
           ))
         }
       }
@@ -394,23 +470,45 @@ export default function TrainerPage() {
     <div className="max-w-5xl space-y-6">
 
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-ink text-2xl font-semibold">Mes disponibilités</h1>
           <p className="text-muted text-sm mt-1">
-            Cliquez-glissez pour créer un créneau · Glissez pour déplacer · Redimensionnez pour ajuster la durée
+            Cliquez-glissez pour créer une plage · Les créneaux contigus sont fusionnés visuellement
           </p>
         </div>
-        {/* Legend */}
-        <div className="flex items-center gap-3 shrink-0 mt-1">
-          <span className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="w-3 h-3 rounded-sm bg-brand inline-block shrink-0" />
-            Disponible
-          </span>
-          <span className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="w-3 h-3 rounded-sm bg-amber-500 inline-block shrink-0" />
-            Réservé
-          </span>
+
+        {/* Duration selector + legend */}
+        <div className="flex items-center gap-4 shrink-0 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted whitespace-nowrap">Durée des créneaux</span>
+            <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-medium">
+              {DURATION_OPTIONS.map(d => (
+                <button
+                  key={d}
+                  onClick={() => setSlotDuration(d)}
+                  className={`px-2.5 py-1.5 transition-colors ${
+                    slotDuration === d
+                      ? 'bg-brand text-white'
+                      : 'text-ink hover:bg-gray-50'
+                  }`}
+                >
+                  {d} min
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-xs text-muted">
+              <span className="w-3 h-3 rounded-sm bg-brand inline-block shrink-0" />
+              Disponible
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-muted">
+              <span className="w-3 h-3 rounded-sm bg-amber-500 inline-block shrink-0" />
+              Réservé
+            </span>
+          </div>
         </div>
       </div>
 
@@ -458,7 +556,7 @@ export default function TrainerPage() {
             selectMirror={true}
             editable={true}
             eventDurationEditable={true}
-            events={events}
+            events={displayEvents}
             select={handleSelect}
             eventClick={handleEventClick}
             eventDrop={handleEventDrop}
@@ -565,15 +663,14 @@ export default function TrainerPage() {
         )}
       </section>
 
-      {/* Delete confirmation modal */}
-      {deleteTargetId && (
+      {deleteTarget && (
         <DeleteModal
+          count={deleteTarget.count}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleteTargetId(null)}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
 
-      {/* Booked slot info modal */}
       {showBookedModal && (
         <BookedModal onClose={() => setShowBookedModal(false)} />
       )}
