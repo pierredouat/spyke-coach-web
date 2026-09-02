@@ -4,7 +4,8 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import frLocale from '@fullcalendar/core/locales/fr'
 import type { DateSelectArg, EventClickArg, EventInput } from '@fullcalendar/core'
-import type { EventDropArg, EventResizeDoneArg } from '@fullcalendar/interaction'
+import type { EventDropArg } from '@fullcalendar/core'
+import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { BodyZone, AppointmentStatus } from '../../types/database'
@@ -316,7 +317,7 @@ export default function TrainerPage() {
     if (!pendingAction) return
     const { eventId, type, newStart, newEnd } = pendingAction
 
-    const patch: Record<string, string> = { end_time: newEnd }
+    const patch: { end_time: string; start_time?: string } = { end_time: newEnd }
     if (type === 'move') patch.start_time = newStart
 
     const { error } = await supabase
