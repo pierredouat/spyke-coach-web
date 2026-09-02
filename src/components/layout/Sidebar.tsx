@@ -102,14 +102,33 @@ function NavItemLink({ item }: { item: NavItem }) {
 }
 
 export default function Sidebar() {
-  const { profile, teamRole } = useAuth()
+  const { profile, team, teamRole } = useAuth()
   const navItems = getNavItems(teamRole)
 
   return (
     <aside className="w-60 min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col fixed left-0 top-0 bottom-0">
-      <div className="px-5 py-6 border-b border-sidebar-border">
-        <span className="text-brand font-bold text-xl tracking-tight">SPYKE</span>
-        <span className="text-white font-light text-xl tracking-tight ml-1">Coach</span>
+      <div className="px-5 pt-5 pb-4 border-b border-sidebar-border">
+        {/* App wordmark — toujours présent */}
+        <div className="flex items-center gap-1 mb-3">
+          <span className="text-brand font-bold text-base tracking-tight">SPYKE</span>
+          <span className="text-white/50 font-light text-base tracking-tight">Coach</span>
+        </div>
+
+        {/* Identité équipe */}
+        {team && (
+          <div className="flex items-center gap-2.5 min-w-0">
+            {team.logo_url && (
+              <img
+                src={team.logo_url}
+                alt=""
+                className="w-8 h-8 rounded-lg object-contain bg-white/5 shrink-0"
+              />
+            )}
+            <span className="text-white text-sm font-semibold truncate leading-tight">
+              {team.name}
+            </span>
+          </div>
+        )}
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
