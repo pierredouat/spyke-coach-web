@@ -11,6 +11,18 @@ export type ExerciseDisciplineGroup = 'sprint' | 'sauts' | 'lancers' | 'demi_fon
 export type MuscuCycle = 'force' | 'puissance' | 'vitesse' | 'hypertrophie'
 export type ExerciseUnit = 'kg' | 's' | 'm' | 'reps' | 'points'
 export type SessionStatus = 'a_faire' | 'en_cours' | 'termine' | 'modifie'
+export type BodyZone =
+  | 'tete' | 'cou'
+  | 'epaule' | 'bras' | 'coude' | 'avant_bras' | 'poignet'
+  | 'poitrine' | 'abdomen'
+  | 'dos_superieur' | 'dos_inferieur'
+  | 'hanche' | 'fessier'
+  | 'quadriceps' | 'ischio_jambiers' | 'adducteurs'
+  | 'genou' | 'mollet' | 'tibia' | 'cheville'
+
+export type InjuryStatus = 'active' | 'recovered'
+export type AppointmentStatus = 'requested' | 'confirmed' | 'cancelled'
+
 export type AthleticEvent =
   | '60m' | '100m' | '200m' | '400m'
   | '60m_haies' | '100m_haies' | '110m_haies' | '400m_haies'
@@ -28,6 +40,29 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   assistant_coach:  'Coach Adjoint',
   strength_coach:   'Préparateur Physique',
   trainer:          'Soigneur / Kiné',
+}
+
+export const BODY_ZONE_LABELS: Record<BodyZone, string> = {
+  tete:             'Tête',
+  cou:              'Cou',
+  epaule:           'Épaule',
+  bras:             'Bras',
+  coude:            'Coude',
+  avant_bras:       'Avant-bras',
+  poignet:          'Poignet',
+  poitrine:         'Poitrine',
+  abdomen:          'Abdomen',
+  dos_superieur:    'Dos supérieur',
+  dos_inferieur:    'Dos inférieur',
+  hanche:           'Hanche',
+  fessier:          'Fessier',
+  quadriceps:       'Quadriceps',
+  ischio_jambiers:  'Ischio-jambiers',
+  adducteurs:       'Adducteurs',
+  genou:            'Genou',
+  mollet:           'Mollet',
+  tibia:            'Tibia',
+  cheville:         'Cheville',
 }
 
 export type Database = {
@@ -425,6 +460,137 @@ export type Database = {
         }
         Relationships: []
       }
+      injuries: {
+        Row: {
+          id: string
+          athlete_id: string
+          body_zone: BodyZone
+          side: string | null
+          severity: number
+          notes: string | null
+          status: InjuryStatus
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          athlete_id: string
+          body_zone: BodyZone
+          side?: string | null
+          severity: number
+          notes?: string | null
+          status?: InjuryStatus
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          athlete_id?: string
+          body_zone?: BodyZone
+          side?: string | null
+          severity?: number
+          notes?: string | null
+          status?: InjuryStatus
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "injuries_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      trainer_availability: {
+        Row: {
+          id: string
+          trainer_id: string
+          team_id: string
+          start_time: string
+          end_time: string
+          is_booked: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          trainer_id: string
+          team_id: string
+          start_time: string
+          end_time: string
+          is_booked?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          trainer_id?: string
+          team_id?: string
+          start_time?: string
+          end_time?: string
+          is_booked?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trainer_availability_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      appointments: {
+        Row: {
+          id: string
+          trainer_availability_id: string
+          athlete_id: string
+          injury_id: string | null
+          status: AppointmentStatus
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          trainer_availability_id: string
+          athlete_id: string
+          injury_id?: string | null
+          status?: AppointmentStatus
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          trainer_availability_id?: string
+          athlete_id?: string
+          injury_id?: string | null
+          status?: AppointmentStatus
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_trainer_availability_id_fkey"
+            columns: ["trainer_availability_id"]
+            isOneToOne: false
+            referencedRelation: "trainer_availability"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_injury_id_fkey"
+            columns: ["injury_id"]
+            isOneToOne: false
+            referencedRelation: "injuries"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       journal_entries_coach_summary: {
@@ -444,6 +610,10 @@ export type Database = {
       get_my_team_ids: {
         Args: Record<never, never>
         Returns: string[]
+      }
+      book_trainer_slot: {
+        Args: { p_availability_id: string; p_injury_id?: string | null }
+        Returns: string
       }
       join_team_with_code: {
         Args: { p_code: string }
@@ -508,6 +678,9 @@ export type TeamMember = Database['public']['Tables']['team_members']['Row']
 export type TeamInvitation = Database['public']['Tables']['team_invitations']['Row']
 export type Performance = Database['public']['Tables']['performances']['Row']
 export type ExerciseResult = Database['public']['Tables']['exercise_results']['Row']
+export type Injury = Database['public']['Tables']['injuries']['Row']
+export type TrainerAvailability = Database['public']['Tables']['trainer_availability']['Row']
+export type Appointment = Database['public']['Tables']['appointments']['Row']
 
 // View: journal_entries_coach_summary — only whitelisted fields, never raw journal_entries
 export type JournalCoachSummary = Database['public']['Views']['journal_entries_coach_summary']['Row']

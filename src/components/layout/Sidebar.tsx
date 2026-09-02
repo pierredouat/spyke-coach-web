@@ -50,8 +50,18 @@ const navItems = [
   },
 ]
 
+const trainerItem = {
+  to: '/trainer',
+  label: 'Disponibilités',
+  icon: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+}
+
 export default function Sidebar() {
-  const { profile } = useAuth()
+  const { profile, teamRole } = useAuth()
 
   return (
     <aside className="w-60 min-h-screen bg-sidebar border-r border-sidebar-border flex flex-col fixed left-0 top-0 bottom-0">
@@ -78,6 +88,22 @@ export default function Sidebar() {
             <span className="text-sm font-medium">{item.label}</span>
           </NavLink>
         ))}
+
+        {teamRole === 'trainer' && (
+          <NavLink
+            to={trainerItem.to}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                isActive
+                  ? 'bg-brand/15 text-brand'
+                  : 'text-muted hover:text-white hover:bg-white/5'
+              }`
+            }
+          >
+            <span className="shrink-0">{trainerItem.icon}</span>
+            <span className="text-sm font-medium">{trainerItem.label}</span>
+          </NavLink>
+        )}
       </nav>
 
       <div className="px-3 py-3 border-t border-sidebar-border">

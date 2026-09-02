@@ -1,8 +1,27 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { StaffRole, TeamInvitation } from '../../types/database'
-import { STAFF_ROLE_LABELS } from '../../types/database'
+import type { StaffRole, TeamInvitation, BodyZone } from '../../types/database'
+import { STAFF_ROLE_LABELS, BODY_ZONE_LABELS } from '../../types/database'
+
+type TeamInjuryRow = {
+  id: string
+  body_zone: BodyZone
+  side: string | null
+  severity: number
+  created_at: string
+  profiles: { first_name: string | null; last_name: string | null } | null
+}
+
+function injurySeverityClass(s: number) {
+  if (s <= 3) return 'text-emerald-700 bg-emerald-50 border-emerald-200'
+  if (s <= 6) return 'text-amber-700 bg-amber-50 border-amber-200'
+  return 'text-red-700 bg-red-50 border-red-200'
+}
+
+function daysSince(isoDate: string) {
+  return Math.floor((Date.now() - new Date(isoDate).getTime()) / 86400000)
+}
 
 type StaffMember = {
   user_id: string
@@ -210,6 +229,7 @@ export default function TeamPage() {
   const { user, team, teamRole, refreshTeam } = useAuth()
   const [members, setMembers] = useState<StaffMember[]>([])
   const [invitations, setInvitations] = useState<TeamInvitation[]>([])
+  const [injuries, setInjuries] = useState<TeamInjuryRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [newCode, setNewCode] = useState<string | null>(null)
@@ -227,7 +247,7 @@ export default function TeamPage() {
     if (!team) return
     setLoading(true)
 
-    const [{ data: membersData }, { data: invData }] = await Promise.all([
+    const [{ data: membersData }, { data: invData }, { data: injuriesData }] = await Promise.all([
       supabase
         .from('team_members')
         .select(`
@@ -245,10 +265,19 @@ export default function TeamPage() {
             .gt('expires_at', new Date().toISOString())
             .order('created_at', { ascending: false })
         : Promise.resolve({ data: [] }),
+      supabase
+        .from('injuries')
+        .select(`
+          id, body_zone, side, severity, created_at,
+          profiles!injuries_athlete_id_fkey(first_name, last_name)
+        `)
+        .eq('status', 'active')
+        .order('severity', { ascending: false }),
     ])
 
     setMembers((membersData ?? []) as unknown as StaffMember[])
     setInvitations((invData ?? []) as TeamInvitation[])
+    setInjuries((injuriesData ?? []) as unknown as TeamInjuryRow[])
     setLoading(false)
   }
 
@@ -433,6 +462,64 @@ export default function TeamPage() {
           onUpdated={async () => { await refreshTeam() }}
         />
       )}
+
+      {/* Blessures actives */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-ink text-base font-semibold">Blessures actives</h2>
+          {injuries.length > 0 && (
+            <span className="text-xs bg-accent/10 text-accent border border-accent/20 px-2 py-0.5 rounded-full">
+              {injuries.length}
+            </span>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 text-muted text-sm py-4">
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Chargement…
+          </div>
+        ) : injuries.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-100 px-5 py-6 text-center">
+            <p className="text-muted text-sm">Aucune blessure active dans l&apos;équipe.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            {injuries.map((inj, i) => {
+              const athleteName = [inj.profiles?.first_name, inj.profiles?.last_name]
+                .filter(Boolean).join(' ') || '—'
+              return (
+                <div
+                  key={inj.id}
+                  className={`flex items-center gap-4 px-5 py-4 ${i < injuries.length - 1 ? 'border-b border-gray-50' : ''}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+                    <span className="text-accent text-xs font-semibold">
+                      {athleteName.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className="text-ink text-sm font-medium">{athleteName}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${injurySeverityClass(inj.severity)}`}>
+                        {inj.severity}/10
+                      </span>
+                    </div>
+                    <p className="text-muted text-xs">
+                      {BODY_ZONE_LABELS[inj.body_zone]}
+                      {inj.side ? ` · ${inj.side === 'left' ? 'Gauche' : 'Droite'}` : ''}
+                      {' · '}depuis {daysSince(inj.created_at)} jour{daysSince(inj.created_at) > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Invite modal */}
       {showInvite && team && user && (

@@ -4,8 +4,9 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type {
   Profile, JournalCoachSummary, SleepHoursEnum, SleepQualityTextEnum,
-  AthleticEvent, MarkUnit,
+  AthleticEvent, MarkUnit, BodyZone,
 } from '../../types/database'
+import { BODY_ZONE_LABELS } from '../../types/database'
 import { formatYMD, addDays, parseYMD, fmtDay, fmtMonthShort } from '../../lib/dates'
 import { formatDisciplines } from '../../lib/disciplines'
 
@@ -66,6 +67,24 @@ type ExerciseGroup = {
   name: string
   unit: string | null
   points: ExerciseResultPoint[]
+}
+
+type InjuryRow = {
+  id: string
+  body_zone: BodyZone
+  side: string | null
+  severity: number
+  created_at: string
+}
+
+function severityClass(s: number) {
+  if (s <= 3) return 'text-emerald-700 bg-emerald-50 border-emerald-200'
+  if (s <= 6) return 'text-amber-700 bg-amber-50 border-amber-200'
+  return 'text-red-700 bg-red-50 border-red-200'
+}
+
+function daysSince(isoDate: string) {
+  return Math.floor((Date.now() - new Date(isoDate).getTime()) / 86400000)
 }
 
 // ─── Metric config ────────────────────────────────────────────────────────────
@@ -431,6 +450,9 @@ export default function AthleteDetailPage() {
   const [exerciseGroups,      setExerciseGroups]      = useState<ExerciseGroup[]>([])
   const [selectedExerciseId,  setSelectedExerciseId]  = useState<string | null>(null)
 
+  // Injuries
+  const [injuries, setInjuries] = useState<InjuryRow[]>([])
+
   // Journal
   const [entries,        setEntries]        = useState<JournalCoachSummary[]>([])
   const [days,           setDays]           = useState<7 | 30>(7)
@@ -450,7 +472,7 @@ export default function AthleteDetailPage() {
 
       if (!rel) { setAllowed(false); setLoading(false); return }
 
-      const [profileRes, perfRes, exRes] = await Promise.all([
+      const [profileRes, perfRes, exRes, injRes] = await Promise.all([
         supabase
           .from('profiles')
           .select('*')
@@ -475,6 +497,12 @@ export default function AthleteDetailPage() {
           .not('exercise_id', 'is', null)
           .not('actual_value_numeric', 'is', null)
           .order('recorded_at', { ascending: true }),
+        supabase
+          .from('injuries')
+          .select('id, body_zone, side, severity, created_at')
+          .eq('athlete_id', athleteId!)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false }),
       ])
 
       if (profileRes.data) setAthlete(profileRes.data as unknown as Profile)
@@ -516,6 +544,8 @@ export default function AthleteDetailPage() {
         setExerciseGroups(arr)
         if (arr.length > 0) setSelectedExerciseId(arr[0].id)
       }
+
+      if (injRes.data) setInjuries(injRes.data as InjuryRow[])
 
       setLoading(false)
     }
@@ -734,6 +764,38 @@ export default function AthleteDetailPage() {
           </>
         )}
       </section>
+
+      {/* ── Section 4 : Blessures actives ───────────────────────────────── */}
+      {injuries.length > 0 && (
+        <section className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-sm font-semibold text-ink">Blessures actives</h2>
+            <span className="text-xs bg-accent/10 text-accent border border-accent/20 px-2 py-0.5 rounded-full">
+              {injuries.length}
+            </span>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
+            {injuries.map(inj => (
+              <div key={inj.id} className="flex items-center gap-4 px-5 py-3.5">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-ink text-sm font-medium">
+                      {BODY_ZONE_LABELS[inj.body_zone]}
+                      {inj.side ? ` — ${inj.side === 'left' ? 'Gauche' : 'Droite'}` : ''}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${severityClass(inj.severity)}`}>
+                      {inj.severity}/10
+                    </span>
+                  </div>
+                  <p className="text-muted text-xs mt-0.5">
+                    depuis {daysSince(inj.created_at)} jour{daysSince(inj.created_at) > 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
