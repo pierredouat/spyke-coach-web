@@ -163,7 +163,7 @@ function Spinner() {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TrainerPage() {
-  const { user } = useAuth()
+  const { user, team } = useAuth()
   const calendarRef = useRef<FullCalendar>(null)
 
   const [events, setEvents] = useState<EventInput[]>([])
@@ -233,14 +233,14 @@ export default function TrainerPage() {
 
   // Click-drag on empty cell → create new slot
   async function handleSelect(info: DateSelectArg) {
-    if (!user) return
+    if (!user || !team) return
     const { start, end } = info
 
     const { data, error } = await supabase
       .from('trainer_availability')
       .insert({
         trainer_id: user.id,
-        team_id: user.id,
+        team_id: team.id,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
       })
