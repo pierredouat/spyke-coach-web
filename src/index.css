@@ -20,3 +20,104 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* ── FullCalendar theme ────────────────────────────────────────────────────── */
+.fc {
+  --fc-border-color: #f3f4f6;
+  --fc-today-bg-color: rgba(55, 67, 186, 0.04);
+  --fc-button-bg-color: #3743BA;
+  --fc-button-border-color: #3743BA;
+  --fc-button-hover-bg-color: #2d389e;
+  --fc-button-hover-border-color: #2d389e;
+  --fc-button-active-bg-color: #2d389e;
+  --fc-button-active-border-color: #2d389e;
+  --fc-highlight-color: rgba(55, 67, 186, 0.15);
+  --fc-non-business-color: rgba(0, 0, 0, 0.015);
+  --fc-page-bg-color: #ffffff;
+  --fc-neutral-bg-color: #f9fafb;
+}
+
+.fc .fc-button {
+  border-radius: 0.5rem !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  padding: 0.375rem 0.875rem !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+}
+
+.fc .fc-button:focus {
+  box-shadow: 0 0 0 2px rgba(55, 67, 186, 0.3) !important;
+}
+
+.fc .fc-button-group .fc-button {
+  border-radius: 0 !important;
+}
+.fc .fc-button-group .fc-button:first-child {
+  border-radius: 0.5rem 0 0 0.5rem !important;
+}
+.fc .fc-button-group .fc-button:last-child {
+  border-radius: 0 0.5rem 0.5rem 0 !important;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: #0D0D0D !important;
+  text-transform: capitalize;
+}
+
+.fc .fc-col-header-cell-cushion {
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  color: #6B7280 !important;
+  text-decoration: none !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 4px !important;
+}
+
+.fc .fc-timegrid-slot-label-cushion {
+  font-size: 0.6875rem !important;
+  color: #9CA3AF !important;
+}
+
+.fc .fc-timegrid-slot {
+  height: 2rem !important;
+}
+
+.fc .fc-event {
+  border-radius: 4px !important;
+  border-width: 0 !important;
+  border-left: 3px solid rgba(0,0,0,0.15) !important;
+  cursor: pointer;
+}
+
+.fc .fc-event-main {
+  padding: 2px 5px !important;
+}
+
+.fc .fc-event-title {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+}
+
+.fc .fc-event-time {
+  font-size: 0.6875rem !important;
+  font-weight: 400 !important;
+}
+
+.fc-event-booked {
+  cursor: not-allowed !important;
+}
+
+.fc .fc-timegrid-now-indicator-line {
+  border-color: #C1592E !important;
+  border-width: 2px !important;
+}
+
+.fc .fc-timegrid-now-indicator-arrow {
+  border-top-color: #C1592E !important;
+  border-bottom-color: #C1592E !important;
+}
