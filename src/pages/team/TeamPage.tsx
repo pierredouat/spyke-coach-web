@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { StaffRole, TeamInvitation, BodyZone } from '../../types/database'
+import type { StaffRole, Team, TeamInvitation, BodyZone } from '../../types/database'
 import { STAFF_ROLE_LABELS, BODY_ZONE_LABELS } from '../../types/database'
 
 type TeamInjuryRow = {
@@ -156,6 +156,179 @@ function InviteModal({
         </form>
       </div>
     </div>
+  )
+}
+
+// ─── Branding section ─────────────────────────────────────────────────────────
+function BrandingSection({
+  team,
+  onUpdated,
+}: {
+  team: Team
+  onUpdated: () => void
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(team.logo_url)
+  const [color, setColor] = useState(team.primary_color)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [savingColor, setSavingColor] = useState(false)
+  const [colorSaved, setColorSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleLogoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setError('Le fichier doit être une image.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("L'image ne doit pas dépasser 2 Mo.")
+      return
+    }
+
+    setUploadingLogo(true)
+    setError(null)
+
+    const ext = file.name.split('.').pop() ?? 'png'
+    const path = `${team.id}/${Date.now()}.${ext}`
+
+    const { error: storageErr } = await supabase.storage
+      .from('team-logos')
+      .upload(path, file, { upsert: true })
+
+    if (storageErr) {
+      setError(storageErr.message)
+      setUploadingLogo(false)
+      // Reset file input so the same file can be retried
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('team-logos')
+      .getPublicUrl(path)
+
+    const { error: dbErr } = await supabase
+      .from('teams')
+      .update({ logo_url: publicUrl })
+      .eq('id', team.id)
+
+    if (dbErr) {
+      setError(dbErr.message)
+    } else {
+      setLogoUrl(publicUrl)
+      onUpdated()
+    }
+
+    setUploadingLogo(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function handleColorSave() {
+    setSavingColor(true)
+    setError(null)
+
+    const { error: dbErr } = await supabase
+      .from('teams')
+      .update({ primary_color: color })
+      .eq('id', team.id)
+
+    if (dbErr) {
+      setError(dbErr.message)
+    } else {
+      setColorSaved(true)
+      onUpdated()
+      setTimeout(() => setColorSaved(false), 2000)
+    }
+    setSavingColor(false)
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-gray-100 p-5">
+      <h2 className="text-ink text-base font-semibold mb-5">Branding</h2>
+
+      <div className="space-y-6">
+        {/* Logo */}
+        <div>
+          <p className="text-sm text-muted mb-3">Logo de l&apos;équipe</p>
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-xl border border-gray-200 overflow-hidden flex items-center justify-center bg-gray-50 shrink-0">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo équipe" className="w-full h-full object-contain" />
+              ) : (
+                <svg className="w-7 h-7 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              )}
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingLogo}
+                className="text-sm text-brand border border-brand/30 hover:bg-brand/5 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {uploadingLogo
+                  ? 'Téléversement…'
+                  : logoUrl ? 'Changer le logo' : 'Importer un logo'}
+              </button>
+              <p className="text-xs text-muted mt-1.5">PNG, JPG, WebP ou SVG · max 2 Mo</p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleLogoChange}
+            />
+          </div>
+        </div>
+
+        {/* Color */}
+        <div>
+          <p className="text-sm text-muted mb-3">Couleur principale</p>
+          <div className="flex items-center gap-4 flex-wrap">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="color"
+                value={color}
+                onChange={e => setColor(e.target.value)}
+                className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5 bg-white"
+              />
+              <span className="text-sm font-mono text-ink">{color.toUpperCase()}</span>
+            </label>
+
+            {/* Preview badge */}
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-xs font-semibold select-none"
+              style={{ backgroundColor: color }}
+            >
+              {logoUrl && (
+                <img src={logoUrl} alt="" className="w-4 h-4 object-contain rounded-sm shrink-0" />
+              )}
+              {team.name}
+            </span>
+
+            <button
+              type="button"
+              onClick={handleColorSave}
+              disabled={savingColor || color === team.primary_color}
+              className="text-sm bg-brand hover:bg-brand-hover text-white font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
+            >
+              {savingColor ? 'Enregistrement…' : colorSaved ? 'Enregistré ✓' : 'Enregistrer'}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-accent text-sm bg-accent/10 border border-accent/20 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -462,6 +635,14 @@ export default function TeamPage() {
         <TeamSettingsSection
           teamId={team.id}
           initialName={team.name}
+          onUpdated={async () => { await refreshTeam() }}
+        />
+      )}
+
+      {/* Branding — head_coach only */}
+      {isHeadCoach && team && (
+        <BrandingSection
+          team={team}
           onUpdated={async () => { await refreshTeam() }}
         />
       )}
