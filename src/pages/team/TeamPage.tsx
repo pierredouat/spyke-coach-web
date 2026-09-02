@@ -169,11 +169,29 @@ function BrandingSection({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [logoUrl, setLogoUrl] = useState<string | null>(team.logo_url)
-  const [color, setColor] = useState(team.primary_color)
+  const [color, setColor] = useState(team.primary_color.toLowerCase())
+  const [hexInput, setHexInput] = useState(team.primary_color.toUpperCase())
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [savingColor, setSavingColor] = useState(false)
   const [colorSaved, setColorSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const HEX_REGEX = /^#[0-9a-fA-F]{6}$/
+  const hexInputValid = HEX_REGEX.test(hexInput)
+
+  function handleColorPickerChange(value: string) {
+    setColor(value.toLowerCase())
+    setHexInput(value.toUpperCase())
+  }
+
+  function handleHexInputChange(value: string) {
+    setHexInput(value)
+    if (HEX_REGEX.test(value)) setColor(value.toLowerCase())
+  }
+
+  function handleHexInputBlur() {
+    if (!hexInputValid) setHexInput(color.toUpperCase())
+  }
 
   async function handleLogoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -290,15 +308,28 @@ function BrandingSection({
         <div>
           <p className="text-sm text-muted mb-3">Couleur principale</p>
           <div className="flex items-center gap-4 flex-wrap">
-            <label className="flex items-center gap-2 cursor-pointer">
+            <div className="flex items-center gap-2">
               <input
                 type="color"
                 value={color}
-                onChange={e => setColor(e.target.value)}
-                className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5 bg-white"
+                onChange={e => handleColorPickerChange(e.target.value)}
+                className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5 bg-white shrink-0"
+                title="Sélecteur de couleur"
               />
-              <span className="text-sm font-mono text-ink">{color.toUpperCase()}</span>
-            </label>
+              <input
+                type="text"
+                value={hexInput}
+                onChange={e => handleHexInputChange(e.target.value)}
+                onBlur={handleHexInputBlur}
+                maxLength={7}
+                placeholder="#000000"
+                className={`w-24 font-mono text-sm px-2 py-1.5 rounded-lg border focus:outline-none focus:ring-1 ${
+                  hexInputValid || hexInput.length <= 1
+                    ? 'border-gray-200 text-ink focus:border-brand focus:ring-brand'
+                    : 'border-accent/50 text-accent focus:border-accent focus:ring-accent/30'
+                }`}
+              />
+            </div>
 
             {/* Preview badge */}
             <span
@@ -314,7 +345,7 @@ function BrandingSection({
             <button
               type="button"
               onClick={handleColorSave}
-              disabled={savingColor || color === team.primary_color}
+              disabled={savingColor || color === team.primary_color.toLowerCase()}
               className="text-sm bg-brand hover:bg-brand-hover text-white font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
             >
               {savingColor ? 'Enregistrement…' : colorSaved ? 'Enregistré ✓' : 'Enregistrer'}
