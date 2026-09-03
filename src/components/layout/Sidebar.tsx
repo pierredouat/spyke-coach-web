@@ -70,6 +70,13 @@ const NAV_TRAINER: NavItem = {
   ),
 }
 
+const SIDEBAR_ROLE_LABELS: Record<StaffRole, string> = {
+  head_coach:      'Head Coach',
+  assistant_coach: 'Coach adjoint',
+  strength_coach:  'Préparateur physique',
+  trainer:         'Trainer',
+}
+
 function getNavItems(role: StaffRole | null): NavItem[] {
   switch (role) {
     case 'trainer':
@@ -111,7 +118,9 @@ export default function Sidebar() {
         {/* App wordmark — toujours présent */}
         <div className="flex items-center gap-1 mb-3">
           <span className="text-brand font-bold text-base tracking-tight">SPYKE</span>
-          <span className="text-white/50 font-light text-base tracking-tight">Coach</span>
+          <span className="text-white/50 font-light text-base tracking-tight">
+            {teamRole ? SIDEBAR_ROLE_LABELS[teamRole] : 'Coach'}
+          </span>
         </div>
 
         {/* Identité équipe */}
