@@ -1,27 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import {
+  FAMILY_LABELS,
+  FILTER_TAB_LABELS, ALL_FILTER_TABS,
+  matchesFilterTab, exerciseTabLabel, exerciseTabColor,
+  type FilterTab,
+} from '../../lib/exerciseLabels'
 import type {
   Exercise, ExerciseFamily, ExerciseDisciplineGroup, MuscuCycle, ExerciseUnit,
 } from '../../types/database'
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
-
-const FAMILY_LABELS: Record<ExerciseFamily, string> = {
-  discipline:     'Discipline',
-  musculation:    'Musculation',
-  plyometrie:     'Plyométrie',
-  gainage_prehab: 'Gainage / Préhab',
-  cardio_aerobie: 'Cardio / Aérobie',
-}
-
-const FAMILY_COLORS: Record<ExerciseFamily, string> = {
-  discipline:     'bg-brand/10 text-brand',
-  musculation:    'bg-slate-100 text-slate-600',
-  plyometrie:     'bg-amber-50 text-amber-700',
-  gainage_prehab: 'bg-emerald-50 text-emerald-700',
-  cardio_aerobie: 'bg-sky-50 text-sky-700',
-}
 
 const GROUP_LABELS: Record<ExerciseDisciplineGroup, string> = {
   sprint:   'Sprint',
@@ -75,7 +65,7 @@ export default function ExercisesPage() {
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [activeFamily, setActiveFamily] = useState<ExerciseFamily | 'all'>('all')
+  const [activeTab, setActiveTab] = useState<FilterTab | 'all'>('all')
   const [activeGroup, setActiveGroup] = useState<ExerciseDisciplineGroup | null>(null)
   const [activeCycle, setActiveCycle] = useState<MuscuCycle | null>(null)
 
@@ -91,7 +81,6 @@ export default function ExercisesPage() {
     const { data } = await supabase
       .from('exercises')
       .select('*')
-      .order('family', { ascending: true })
       .order('name', { ascending: true })
     setExercises(data ?? [])
     setLoading(false)
@@ -99,15 +88,15 @@ export default function ExercisesPage() {
 
   // ── Filters ──────────────────────────────────────────────────────────────────
 
-  function handleFamilyChange(f: ExerciseFamily | 'all') {
-    setActiveFamily(f)
+  function handleTabChange(f: FilterTab | 'all') {
+    setActiveTab(f)
     setActiveGroup(null)
     setActiveCycle(null)
   }
 
   const filtered = exercises.filter(ex => {
     if (search && !ex.name.toLowerCase().includes(search.toLowerCase())) return false
-    if (activeFamily !== 'all' && ex.family !== activeFamily) return false
+    if (activeTab !== 'all' && !matchesFilterTab(ex, activeTab)) return false
     if (activeGroup && ex.discipline_group !== activeGroup) return false
     if (activeCycle && ex.musculation_cycle !== activeCycle) return false
     return true
@@ -191,7 +180,7 @@ export default function ExercisesPage() {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors"
               />
             </div>
-            {/* Family */}
+            {/* Family — only SaaS enum values (written to exercises.family) */}
             <div>
               <label className="block text-xs text-muted mb-1.5">Famille</label>
               <select
@@ -299,25 +288,25 @@ export default function ExercisesPage() {
         )}
       </div>
 
-      {/* Family tabs */}
+      {/* Filter tabs — SaaS families + mobile category values */}
       <div className="flex items-center gap-1 mb-3 flex-wrap">
-        {(['all', ...ALL_FAMILIES] as const).map(f => (
+        {(['all', ...ALL_FILTER_TABS] as const).map(f => (
           <button
             key={f}
-            onClick={() => handleFamilyChange(f)}
+            onClick={() => handleTabChange(f)}
             className={`text-sm px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
-              activeFamily === f
+              activeTab === f
                 ? 'bg-brand text-white'
                 : 'text-muted hover:text-ink hover:bg-gray-100'
             }`}
           >
-            {f === 'all' ? 'Tous' : FAMILY_LABELS[f]}
+            {f === 'all' ? 'Tous' : FILTER_TAB_LABELS[f]}
           </button>
         ))}
       </div>
 
       {/* Sub-filters */}
-      {activeFamily === 'discipline' && (
+      {activeTab === 'discipline' && (
         <div className="flex items-center gap-1 mb-4 flex-wrap">
           {ALL_GROUPS.map(g => (
             <button
@@ -334,7 +323,7 @@ export default function ExercisesPage() {
           ))}
         </div>
       )}
-      {activeFamily === 'musculation' && (
+      {activeTab === 'musculation' && (
         <div className="flex items-center gap-1 mb-4 flex-wrap">
           {ALL_CYCLES.map(c => (
             <button
@@ -380,14 +369,16 @@ export default function ExercisesPage() {
 
 function ExerciseCard({ exercise: ex }: { exercise: Exercise }) {
   const isPersonal = ex.coach_id !== null
+  const label = exerciseTabLabel(ex)
+  const colorClass = label ? exerciseTabColor(ex) : null
 
   return (
     <div className="bg-white border border-gray-100 rounded-xl p-4 flex flex-col gap-2 hover:border-gray-200 transition-colors">
-      {/* Top row: family badge + generic/personal tag */}
+      {/* Top row: family/category badge + generic/personal tag */}
       <div className="flex items-center justify-between gap-2">
-        {ex.family ? (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${FAMILY_COLORS[ex.family]}`}>
-            {FAMILY_LABELS[ex.family]}
+        {label && colorClass ? (
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}>
+            {label}
           </span>
         ) : (
           <span className="text-xs text-muted/50">—</span>

@@ -1,7 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { Profile, Exercise, ExerciseFamily, SessionWithExercises } from '../../types/database'
-import { FAMILY_LABELS } from '../../lib/exerciseLabels'
+import {
+  FAMILY_LABELS, FILTER_TAB_LABELS, ALL_FILTER_TABS,
+  matchesFilterTab, type FilterTab,
+} from '../../lib/exerciseLabels'
 
 // ─── ExEntry (draft state per exercise) ───────────────────────────────────────
 interface ExEntry {
@@ -106,11 +109,11 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
   // Exercise picker
   const [showPicker, setShowPicker]     = useState(false)
   const [pickerSearch, setPickerSearch] = useState('')
-  const [pickerFamily, setPickerFamily] = useState<ExerciseFamily | 'all'>('all')
+  const [pickerFamily, setPickerFamily] = useState<FilterTab | 'all'>('all')
   const [allExercises, setAllExercises] = useState<Exercise[]>([])
 
   const [createName, setCreateName]   = useState('')
-  const [createFamily, setCreateFamily] = useState<ExerciseFamily>('gainage_prehab')
+  const [createFamily, setCreateFamily] = useState<ExerciseFamily>('gainage')
   const [creating, setCreating] = useState(false)
 
   const [saving, setSaving] = useState(false)
@@ -162,7 +165,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
 
   // ── Exercise picker ─────────────────────────────────────────────────────────
   const filteredExercises = allExercises.filter(ex => {
-    if (pickerFamily !== 'all' && ex.family !== pickerFamily) return false
+    if (pickerFamily !== 'all' && !matchesFilterTab(ex, pickerFamily)) return false
     if (pickerSearch && !ex.name.toLowerCase().includes(pickerSearch.toLowerCase())) return false
     return true
   })
@@ -410,10 +413,10 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                       className="w-full text-sm px-2 py-1.5 rounded focus:outline-none text-ink" />
                   </div>
                   <div className="flex gap-1 px-2 py-1.5 bg-white border-b border-gray-100 overflow-x-auto">
-                    {(['all', 'discipline', 'musculation', 'plyometrie', 'gainage_prehab', 'cardio_aerobie'] as const).map(f => (
+                    {(['all', ...ALL_FILTER_TABS] as const).map(f => (
                       <button key={f} type="button" onClick={() => setPickerFamily(f)}
                         className={`shrink-0 text-xs px-2 py-1 rounded-md font-medium transition-colors ${pickerFamily === f ? 'bg-brand text-white' : 'text-muted hover:text-ink hover:bg-gray-100'}`}>
-                        {f === 'all' ? 'Tous' : FAMILY_LABELS[f]}
+                        {f === 'all' ? 'Tous' : FILTER_TAB_LABELS[f]}
                       </button>
                     ))}
                   </div>
@@ -444,7 +447,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                       onChange={e => setCreateFamily(e.target.value as ExerciseFamily)}
                       className="shrink-0 border border-gray-200 rounded-md px-1.5 py-1 text-xs text-ink focus:outline-none focus:border-brand bg-gray-50"
                     >
-                      {(['discipline', 'musculation', 'plyometrie', 'gainage_prehab', 'cardio_aerobie'] as const).map(f => (
+                      {(['discipline', 'musculation', 'explosif', 'pliometrie', 'gainage', 'mobilite', 'vitesse', 'coordination', 'cardio_aerobie'] as const).map(f => (
                         <option key={f} value={f}>{FAMILY_LABELS[f]}</option>
                       ))}
                     </select>
