@@ -10,10 +10,12 @@ interface ExEntry {
   sets: string
   reps: string
   // Load / metrics
-  intensity: string           // charge libre (muscu) ou texte intensité (cardio)
+  intensity: string            // charge fixe (muscu) ou texte intensité (cardio)
   intensity_unit: 'kg' | 'lbs' // displayed in chosen unit, always stored in kg
-  distance: string            // → distance_meters
-  duration: string            // → duration_seconds
+  intensity_mode: 'fixed' | 'percentage'
+  intensity_percentage: string // 0-200, stored as float
+  distance: string             // → distance_meters
+  duration: string             // → duration_seconds
   // Recovery (displayed in chosen unit, stored in seconds)
   rest_value: string
   rest_unit: 'min' | 's'
@@ -31,7 +33,9 @@ function restFromSeconds(s: number | null): Pick<ExEntry, 'rest_value' | 'rest_u
 function emptyEntry(ex: Exercise): ExEntry {
   return {
     exercise: ex,
-    sets: '', reps: '', intensity: '', intensity_unit: 'kg', distance: '', duration: '',
+    sets: '', reps: '',
+    intensity: '', intensity_unit: 'kg', intensity_mode: 'fixed', intensity_percentage: '',
+    distance: '', duration: '',
     rest_value: '', rest_unit: 's',
     intention: '', notes: '',
   }
@@ -87,6 +91,8 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         reps: se.reps?.toString() ?? '',
         intensity: se.intensity ?? '',
         intensity_unit: 'kg',
+        intensity_mode: se.intensity_mode ?? 'fixed',
+        intensity_percentage: se.intensity_percentage?.toString() ?? '',
         distance: se.distance_meters?.toString() ?? '',
         duration: se.duration_seconds?.toString() ?? '',
         rest_value,
@@ -109,6 +115,26 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
 
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
+
+  // Max de l'athlète cible par exercise_id — pour l'aperçu % du max
+  // Chargé uniquement quand un seul athlète est ciblé (edit ou sélection unique)
+  const [athleteMaxes, setAthleteMaxes] = useState<Record<string, number>>({})
+  const singleAthleteId = isEdit
+    ? session!.athlete_id
+    : selectedAthleteIds.length === 1 ? selectedAthleteIds[0] : null
+
+  useEffect(() => {
+    if (!singleAthleteId) { setAthleteMaxes({}); return }
+    supabase
+      .from('athlete_maxes')
+      .select('exercise_id, max_value_kg')
+      .eq('athlete_id', singleAthleteId)
+      .then(({ data }) => {
+        const map: Record<string, number> = {}
+        ;(data ?? []).forEach(r => { map[r.exercise_id] = r.max_value_kg })
+        setAthleteMaxes(map)
+      })
+  }, [singleAthleteId])
 
   useEffect(() => {
     supabase.from('exercises').select('*').order('family').order('name').then(({ data }) => {
@@ -241,7 +267,11 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
         distance_meters: e.distance ? parseInt(e.distance) : null,
         duration_seconds: e.duration ? parseInt(e.duration) : null,
         rest_seconds: restS,
+        intensity_mode: e.intensity_mode,
+        intensity_percentage: e.intensity_mode === 'percentage' && e.intensity_percentage
+          ? parseFloat(e.intensity_percentage) : null,
         intensity: (() => {
+          if (e.intensity_mode === 'percentage') return null
           if (!e.intensity) return null
           if (e.intensity_unit === 'lbs') {
             const num = parseFloat(e.intensity)
@@ -444,6 +474,7 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
                     index={i}
                     onRemove={() => removeEntry(i)}
                     onUpdate={(k, v) => updateEntry(i, k, v)}
+                    athleteMax={entry.exercise.id ? (athleteMaxes[entry.exercise.id] ?? null) : null}
                   />
                 ))}
               </div>
@@ -475,11 +506,12 @@ export default function SessionModal({ coachId, athletes, defaultDate, session, 
 }
 
 // ─── Exercise entry card ───────────────────────────────────────────────────────
-function ExerciseCard({ entry, index, onRemove, onUpdate }: {
+function ExerciseCard({ entry, index, onRemove, onUpdate, athleteMax }: {
   entry: ExEntry
   index: number
   onRemove: () => void
   onUpdate: <K extends keyof ExEntry>(k: K, v: ExEntry[K]) => void
+  athleteMax: number | null
 }) {
   return (
     <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/50 space-y-2.5">
@@ -511,25 +543,61 @@ function ExerciseCard({ entry, index, onRemove, onUpdate }: {
         <ExField label="Répétitions"   value={entry.reps}      onChange={v => onUpdate('reps', v)} />
         <ExField label="Distance (m)"  value={entry.distance}  onChange={v => onUpdate('distance', v)} />
         <ExField label="Durée (s)"     value={entry.duration}  onChange={v => onUpdate('duration', v)} />
-        {/* Intensité — paired value + unit selector */}
+        {/* Intensité — toggle Fixe / % max */}
         <div>
-          <label className="block text-xs text-muted mb-1">Intensité</label>
-          <div className="flex gap-1">
-            <input
-              value={entry.intensity}
-              onChange={e => onUpdate('intensity', e.target.value)}
-              placeholder="80"
-              className="min-w-0 flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
-            />
-            <select
-              value={entry.intensity_unit}
-              onChange={e => onUpdate('intensity_unit', e.target.value as 'kg' | 'lbs')}
-              className="shrink-0 border border-gray-200 rounded-md px-1.5 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
-            >
-              <option value="kg">kg</option>
-              <option value="lbs">lbs</option>
-            </select>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-muted">Intensité</label>
+            <div className="flex rounded overflow-hidden border border-gray-200 text-[10px]">
+              <button
+                type="button"
+                onClick={() => onUpdate('intensity_mode', 'fixed')}
+                className={`px-1.5 py-0.5 transition-colors ${entry.intensity_mode === 'fixed' ? 'bg-brand text-white' : 'bg-white text-muted hover:bg-gray-50'}`}
+              >Fixe</button>
+              <button
+                type="button"
+                onClick={() => onUpdate('intensity_mode', 'percentage')}
+                className={`px-1.5 py-0.5 border-l border-gray-200 transition-colors ${entry.intensity_mode === 'percentage' ? 'bg-brand text-white' : 'bg-white text-muted hover:bg-gray-50'}`}
+              >% max</button>
+            </div>
           </div>
+          {entry.intensity_mode === 'fixed' ? (
+            <div className="flex gap-1">
+              <input
+                value={entry.intensity}
+                onChange={e => onUpdate('intensity', e.target.value)}
+                placeholder="80"
+                className="min-w-0 flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+              />
+              <select
+                value={entry.intensity_unit}
+                onChange={e => onUpdate('intensity_unit', e.target.value as 'kg' | 'lbs')}
+                className="shrink-0 border border-gray-200 rounded-md px-1.5 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+              >
+                <option value="kg">kg</option>
+                <option value="lbs">lbs</option>
+              </select>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={200}
+                  value={entry.intensity_percentage}
+                  onChange={e => onUpdate('intensity_percentage', e.target.value)}
+                  placeholder="75"
+                  className="min-w-0 flex-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-brand transition-colors bg-white"
+                />
+                <span className="text-xs text-muted shrink-0">%</span>
+              </div>
+              {athleteMax !== null && entry.intensity_percentage !== '' && !isNaN(parseFloat(entry.intensity_percentage)) && (
+                <p className="text-[10px] text-muted mt-0.5">
+                  ≈ {(athleteMax * parseFloat(entry.intensity_percentage) / 100).toFixed(1)} kg
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         {/* Récup — paired value + unit selector */}

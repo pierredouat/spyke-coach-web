@@ -12,6 +12,7 @@ import PlanningPage from './pages/planning/PlanningPage'
 import AthleteDetailPage from './pages/athletes/AthleteDetailPage'
 import TeamPage from './pages/team/TeamPage'
 import TrainerPage from './pages/trainer/TrainerPage'
+import TeamAnalysisPage from './pages/analysis/TeamAnalysisPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, profile, loading } = useAuth()
@@ -118,6 +119,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <DashboardLayout>
               <TrainerPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/analysis"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <TeamAnalysisPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

@@ -2,6 +2,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json } | 
 
 export type UserRole = 'athlete' | 'coach'
 export type StaffRole = 'head_coach' | 'assistant_coach' | 'strength_coach' | 'trainer'
+export type Gender = 'men' | 'women'
 export type Discipline = 'sprint' | 'demi_fond' | 'fond' | 'sauts' | 'lancers' | 'combines' | 'marche'
 export type RelationshipStatus = 'pending' | 'active' | 'inactive'
 export type SleepHoursEnum = 'less_6' | '6_to_8' | 'more_8'
@@ -83,6 +84,9 @@ export type Database = {
           onboarding_completed: boolean
           created_at: string | null
           updated_at: string | null
+          gender: Gender | null
+          weight_kg: number | null
+          height_cm: number | null
         }
         Insert: {
           id: string
@@ -98,6 +102,9 @@ export type Database = {
           onboarding_completed?: boolean
           created_at?: string | null
           updated_at?: string | null
+          gender?: Gender | null
+          weight_kg?: number | null
+          height_cm?: number | null
         }
         Update: {
           id?: string
@@ -113,6 +120,9 @@ export type Database = {
           onboarding_completed?: boolean
           created_at?: string | null
           updated_at?: string | null
+          gender?: Gender | null
+          weight_kg?: number | null
+          height_cm?: number | null
         }
         Relationships: []
       }
@@ -419,6 +429,8 @@ export type Database = {
           duration_seconds: number | null
           rest_seconds: number | null
           intensity: string | null
+          intensity_mode: 'fixed' | 'percentage'
+          intensity_percentage: number | null
           intention: string | null
           technical_notes: string | null
           notes: string | null
@@ -436,6 +448,8 @@ export type Database = {
           duration_seconds?: number | null
           rest_seconds?: number | null
           intensity?: string | null
+          intensity_mode?: 'fixed' | 'percentage'
+          intensity_percentage?: number | null
           intention?: string | null
           technical_notes?: string | null
           notes?: string | null
@@ -453,12 +467,51 @@ export type Database = {
           duration_seconds?: number | null
           rest_seconds?: number | null
           intensity?: string | null
+          intensity_mode?: 'fixed' | 'percentage'
+          intensity_percentage?: number | null
           intention?: string | null
           technical_notes?: string | null
           notes?: string | null
           created_at?: string
         }
         Relationships: []
+      }
+      athlete_maxes: {
+        Row: {
+          id: string
+          athlete_id: string
+          exercise_id: string
+          max_value_kg: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          athlete_id: string
+          exercise_id: string
+          max_value_kg: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          athlete_id?: string
+          exercise_id?: string
+          max_value_kg?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'athlete_maxes_athlete_id_fkey'
+            columns: ['athlete_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'athlete_maxes_exercise_id_fkey'
+            columns: ['exercise_id']
+            referencedRelation: 'exercises'
+            referencedColumns: ['id']
+          }
+        ]
       }
       injuries: {
         Row: {
@@ -662,6 +715,8 @@ export type SessionExercise = {
   duration_seconds: number | null
   rest_seconds: number | null
   intensity: string | null
+  intensity_mode: 'fixed' | 'percentage'
+  intensity_percentage: number | null
   intention: string | null
   technical_notes: string | null
   notes: string | null
