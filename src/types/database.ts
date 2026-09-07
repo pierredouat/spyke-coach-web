@@ -743,6 +743,21 @@ export type TeamInvitation = Database['public']['Tables']['team_invitations']['R
 export type Performance = Database['public']['Tables']['performances']['Row']
 export type ExerciseResult = Database['public']['Tables']['exercise_results']['Row']
 export type Injury = Database['public']['Tables']['injuries']['Row']
+
+export type ExerciseNote = {
+  id:          string
+  coach_id:    string
+  exercise_id: string
+  athlete_id:  string | null
+  worked:      boolean
+  comment:     string
+  created_at:  string
+}
+
+export type ExerciseNoteWithMeta = ExerciseNote & {
+  coach_name:   string | null
+  athlete_name: string | null
+}
 export type TrainerAvailability = Database['public']['Tables']['trainer_availability']['Row']
 export type Appointment = Database['public']['Tables']['appointments']['Row']
 

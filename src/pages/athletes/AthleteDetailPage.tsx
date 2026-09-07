@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type {
   Profile, JournalCoachSummary, SleepHoursEnum, SleepQualityTextEnum,
-  AthleticEvent, MarkUnit, BodyZone,
+  AthleticEvent, MarkUnit, BodyZone, ExerciseNoteWithMeta,
 } from '../../types/database'
 import { BODY_ZONE_LABELS } from '../../types/database'
 import { formatYMD, addDays, parseYMD, fmtDay, fmtMonthShort } from '../../lib/dates'
@@ -432,6 +432,39 @@ function PillSelector<T extends string>({ options, selected, onSelect, getLabel 
   )
 }
 
+// ─── Exercise note card ───────────────────────────────────────────────────────
+function ExerciseNoteCard({ note }: { note: ExerciseNoteWithMeta }) {
+  const date = new Date(note.created_at).toLocaleDateString('fr-FR', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  })
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${
+      note.worked
+        ? 'bg-emerald-50 border-emerald-100'
+        : 'bg-red-50 border-red-100'
+    }`}>
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+            note.worked
+              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+              : 'bg-red-100 text-red-700 border border-red-200'
+          }`}>
+            {note.worked ? '✓ A fonctionné' : '✗ N'a pas fonctionné'}
+          </span>
+          {note.coach_name && (
+            <span className="text-xs text-muted">{note.coach_name}</span>
+          )}
+        </div>
+        <span className="text-xs text-muted shrink-0">{date}</span>
+      </div>
+      {note.comment && (
+        <p className="text-sm text-ink leading-relaxed">{note.comment}</p>
+      )}
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function AthleteDetailPage() {
   const { id: athleteId } = useParams<{ id: string }>()
@@ -449,6 +482,15 @@ export default function AthleteDetailPage() {
   // Exercises
   const [exerciseGroups,      setExerciseGroups]      = useState<ExerciseGroup[]>([])
   const [selectedExerciseId,  setSelectedExerciseId]  = useState<string | null>(null)
+
+  // Exercise notes
+  const [exerciseNotes,   setExerciseNotes]   = useState<ExerciseNoteWithMeta[]>([])
+  const [notesLoading,    setNotesLoading]    = useState(false)
+  const [showNoteForm,    setShowNoteForm]    = useState(false)
+  const [noteWorked,      setNoteWorked]      = useState(true)
+  const [noteComment,     setNoteComment]     = useState('')
+  const [noteSaving,      setNoteSaving]      = useState(false)
+  const [noteError,       setNoteError]       = useState<string | null>(null)
 
   // Injuries
   const [injuries, setInjuries] = useState<InjuryRow[]>([])
@@ -574,6 +616,76 @@ export default function AthleteDetailPage() {
       })
   }, [athleteId, days, allowed, loading])
 
+  // ── Effect 3: notes for selected exercise + athlete ───────────────────────
+  useEffect(() => {
+    if (!selectedExerciseId || !athleteId || !allowed || loading) return
+    setNotesLoading(true)
+    setShowNoteForm(false)
+    setNoteComment('')
+    setNoteWorked(true)
+    supabase
+      .from('exercise_notes')
+      .select(`
+        id, coach_id, exercise_id, athlete_id, worked, comment, created_at,
+        coach:profiles!exercise_notes_coach_id_fkey(first_name, last_name)
+      `)
+      .eq('exercise_id', selectedExerciseId)
+      .eq('athlete_id', athleteId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        const rows = (data ?? []) as (ExerciseNoteWithMeta & {
+          coach: { first_name: string | null; last_name: string | null } | null
+        })[]
+        setExerciseNotes(rows.map(r => ({
+          ...r,
+          coach_name:   r.coach ? [r.coach.first_name, r.coach.last_name].filter(Boolean).join(' ') || null : null,
+          athlete_name: null,
+        })))
+        setNotesLoading(false)
+      })
+  }, [selectedExerciseId, athleteId, allowed, loading])
+
+  async function submitNote(e: FormEvent) {
+    e.preventDefault()
+    if (!user || !selectedExerciseId || noteSaving) return
+    setNoteSaving(true)
+    setNoteError(null)
+    const { error } = await supabase.from('exercise_notes').insert({
+      coach_id:    user.id,
+      exercise_id: selectedExerciseId,
+      athlete_id:  athleteId ?? null,
+      worked:      noteWorked,
+      comment:     noteComment.trim(),
+    })
+    if (error) {
+      setNoteError(error.message)
+      setNoteSaving(false)
+      return
+    }
+    setNoteComment('')
+    setNoteWorked(true)
+    setShowNoteForm(false)
+    setNoteSaving(false)
+    // Reload notes
+    const { data } = await supabase
+      .from('exercise_notes')
+      .select(`
+        id, coach_id, exercise_id, athlete_id, worked, comment, created_at,
+        coach:profiles!exercise_notes_coach_id_fkey(first_name, last_name)
+      `)
+      .eq('exercise_id', selectedExerciseId)
+      .eq('athlete_id', athleteId!)
+      .order('created_at', { ascending: false })
+    const rows = (data ?? []) as (ExerciseNoteWithMeta & {
+      coach: { first_name: string | null; last_name: string | null } | null
+    })[]
+    setExerciseNotes(rows.map(r => ({
+      ...r,
+      coach_name:   r.coach ? [r.coach.first_name, r.coach.last_name].filter(Boolean).join(' ') || null : null,
+      athlete_name: null,
+    })))
+  }
+
   // ── Derived ───────────────────────────────────────────────────────────────
   const eventPerfs = performances.filter(p => p.event === selectedEvent)
   const eventUnit  = eventPerfs[0]?.unit ?? 'seconds'
@@ -678,10 +790,10 @@ export default function AthleteDetailPage() {
         )}
       </section>
 
-      {/* ── Section 2 : Musculation ───────────────────────────────────────── */}
+      {/* ── Section 2 : Progression par exercice ─────────────────────────── */}
       <section className="mb-8">
         <div className="flex items-center justify-between mb-3">
-          <SectionHeading title="Musculation" />
+          <SectionHeading title="Progression par exercice" />
           {selectedExercise && selectedExercise.points.length > 0 && (
             <span className="text-xs text-muted">
               {selectedExercise.points.length} résultat{selectedExercise.points.length > 1 ? 's' : ''}
@@ -699,7 +811,7 @@ export default function AthleteDetailPage() {
             <PillSelector
               options={exerciseGroups.map(g => g.id)}
               selected={selectedExerciseId}
-              onSelect={setSelectedExerciseId}
+              onSelect={id => { setSelectedExerciseId(id) }}
               getLabel={id => exerciseGroups.find(g => g.id === id)?.name ?? id}
             />
 
@@ -708,6 +820,112 @@ export default function AthleteDetailPage() {
                 points={selectedExercise.points}
                 name={selectedExercise.name}
               />
+            )}
+          </div>
+        )}
+
+        {/* ── Notes coach sur cet exercice ─────────────────────────────────── */}
+        {selectedExerciseId && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-muted uppercase tracking-wide">
+                Notes coach · {exerciseGroups.find(g => g.id === selectedExerciseId)?.name}
+              </p>
+              {!showNoteForm && (
+                <button
+                  onClick={() => setShowNoteForm(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-brand hover:text-brand-hover transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Ajouter une note
+                </button>
+              )}
+            </div>
+
+            {/* Formulaire d'ajout */}
+            {showNoteForm && (
+              <form
+                onSubmit={submitNote}
+                className="bg-white rounded-xl border border-gray-100 p-4 mb-3 space-y-3"
+              >
+                <p className="text-xs font-semibold text-ink">Nouvelle note</p>
+
+                {/* Toggle fonctionné / pas fonctionné */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNoteWorked(true)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                      noteWorked
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                        : 'bg-white border-gray-200 text-muted hover:border-gray-300'
+                    }`}
+                  >
+                    ✓ A fonctionné
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoteWorked(false)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                      !noteWorked
+                        ? 'bg-red-50 border-red-300 text-red-700'
+                        : 'bg-white border-gray-200 text-muted hover:border-gray-300'
+                    }`}
+                  >
+                    ✗ N'a pas fonctionné
+                  </button>
+                </div>
+
+                {/* Commentaire */}
+                <textarea
+                  value={noteComment}
+                  onChange={e => setNoteComment(e.target.value)}
+                  rows={2}
+                  placeholder="Observation, ajustement à retenir…"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-ink placeholder-muted focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-colors resize-none"
+                  maxLength={500}
+                />
+
+                {noteError && (
+                  <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                    {noteError}
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={noteSaving}
+                    className="bg-brand hover:bg-brand-hover text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {noteSaving ? 'Enregistrement…' : 'Enregistrer'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowNoteForm(false); setNoteError(null) }}
+                    className="text-xs text-muted hover:text-ink transition-colors px-2"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Historique des notes */}
+            {notesLoading ? (
+              <Spinner />
+            ) : exerciseNotes.length === 0 && !showNoteForm ? (
+              <div className="bg-white rounded-xl border border-gray-100 px-4 py-5 text-center">
+                <p className="text-muted text-xs">Aucune note pour cet exercice avec cet athlète.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {exerciseNotes.map(note => (
+                  <ExerciseNoteCard key={note.id} note={note} />
+                ))}
+              </div>
             )}
           </div>
         )}
