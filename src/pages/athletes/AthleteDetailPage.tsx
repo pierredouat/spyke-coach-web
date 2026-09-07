@@ -596,7 +596,7 @@ export default function AthleteDetailPage() {
     }
 
     load()
-  }, [authLoading, user, team, athleteId])
+  }, [authLoading, user?.id, team?.id, athleteId])
 
   // ── Effect 2: journal (re-runs when days or allowed changes post-load) ────
   useEffect(() => {
