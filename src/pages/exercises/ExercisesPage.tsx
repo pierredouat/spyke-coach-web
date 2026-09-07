@@ -110,7 +110,7 @@ export default function ExercisesPage() {
         if (!data) return
         const seen = new Set<string>()
         const rows: AthleteRow[] = []
-        for (const r of data as { athlete_id: string; athlete: { first_name: string | null; last_name: string | null } | null }[]) {
+        for (const r of data as unknown as { athlete_id: string; athlete: { first_name: string | null; last_name: string | null } | null }[]) {
           if (seen.has(r.athlete_id)) continue
           seen.add(r.athlete_id)
           rows.push({

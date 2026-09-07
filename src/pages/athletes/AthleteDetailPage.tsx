@@ -450,7 +450,7 @@ function ExerciseNoteCard({ note }: { note: ExerciseNoteWithMeta }) {
               ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
               : 'bg-red-100 text-red-700 border border-red-200'
           }`}>
-            {note.worked ? '✓ A fonctionné' : '✗ N'a pas fonctionné'}
+            {note.worked ? '✓ A fonctionné' : '✗ N’a pas fonctionné'}
           </span>
           {note.coach_name && (
             <span className="text-xs text-muted">{note.coach_name}</span>

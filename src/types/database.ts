@@ -653,6 +653,58 @@ export type Database = {
           }
         ]
       }
+      exercise_notes: {
+        Row: {
+          id:          string
+          coach_id:    string
+          exercise_id: string
+          athlete_id:  string | null
+          worked:      boolean
+          comment:     string
+          created_at:  string
+        }
+        Insert: {
+          id?:         string
+          coach_id:    string
+          exercise_id: string
+          athlete_id?: string | null
+          worked:      boolean
+          comment?:    string
+          created_at?: string
+        }
+        Update: {
+          id?:          string
+          coach_id?:    string
+          exercise_id?: string
+          athlete_id?:  string | null
+          worked?:      boolean
+          comment?:     string
+          created_at?:  string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_notes_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_notes_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_notes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       journal_entries_coach_summary: {
